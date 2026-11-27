@@ -134,6 +134,7 @@ function renderPlayStatic() {
   $('#playHint').textContent = sc.blurb;
   buildInputPanel();
   renderTouch();
+  const det = $('#detectToggle'); if (det) det.checked = !!S.detectSongs;
   renderStaff(false);
   renderPractice();
   renderRecorder();
@@ -271,6 +272,10 @@ function renderStaff(pop) {
     ? staff.items.map((it, i) => `<span class="rn ${it.cls || ''} ${pop && i === staff.items.length - 1 ? 'new' : ''}"><b>${label(Math.round(it.midi))}</b>${combo({ id: it.id, half: it.half, bend: roundBend(it.bend) })}</span>`).join('')
     : '<p class="muted">Notes you play appear here. The ocarina songs are recognized automatically.</p>';
 }
+$('#detectToggle').addEventListener('change', (e) => {
+  S.detectSongs = e.target.checked; save(); fresh.controls = false;
+  if (!S.detectSongs) el.banner.classList.remove('show');
+});
 $('#clearStaff').addEventListener('click', () => { staff.items = []; staff.locked = false; renderStaff(false); el.banner.classList.remove('show'); });
 
 function pushStaff(e) {
@@ -291,6 +296,7 @@ function songList() {
 }
 
 function checkSongs() {
+  if (!S.detectSongs) return;
   for (const song of songList()) {
     const n = song.seq.length;
     if (staff.items.length < n) continue;
@@ -363,17 +369,6 @@ function songEvents(song) {
     const inRange = m >= M.LOWEST && m <= M.HIGHEST;
     return { combo: inRange ? M.bestCombo(m) : null, midi: m, beats: n.beats, out: !inRange };
   });
-}
-function songDifficulty(song) {
-  if (song.seq) return { tag: 'easy', text: 'Naturals only' };
-  try {
-    const ev = songEvents(song).filter((e) => e.midi != null);
-    if (ev.some((e) => e.out)) return { tag: 'hard', text: 'Out of range' };
-    const avg = ev.reduce((a, e) => a + e.combo.cost, 0) / Math.max(1, ev.length);
-    if (avg < 0.35) return { tag: 'easy', text: 'Easy' };
-    if (avg < 0.9) return { tag: '', text: 'Medium' };
-    return { tag: 'hard', text: 'Tricky' };
-  } catch (e) { return { tag: 'hard', text: 'Error' }; }
 }
 
 let listening = null;
@@ -569,18 +564,15 @@ el.rec.addEventListener('change', (e) => { if (e.target.dataset.r === 'bpm') rec
 // ---- Touch pad
 function renderTouch() {
   const n64 = S.scheme === 'n64';
-  const pos = n64
-    ? { cu: [130, 0], cl: [78, 60], cr: [182, 60], cd: [130, 120], a: [0, 120] }
-    : { a: [0, 0], cd: [186, 0], cu: [116, 50], cl: [56, 108], cr: [176, 108] };
-  const notes = M.NOTE_IDS.map((id) => `<button class="tp-btn tp-note" data-n="${id}" style="left:${pos[id][0]}px;top:${pos[id][1]}px" aria-label="${G.buttonName(id, S.scheme, STY)}">${icon(id)}${S.showKeys ? `<small>${esc(KEY_HELP[id].split(' / ')[0])}</small>` : ''}</button>`).join('');
+  const notes = M.NOTE_IDS.map((id) => `<button class="tp-btn tp-note" data-n="${id}" style="grid-area:${id}" aria-label="${G.buttonName(id, S.scheme, STY)}" title="Keyboard: ${esc(KEY_HELP[id])}">${icon(id)}<small>${M.noteParts(M.BASE_MIDI[id]).label}</small></button>`).join('');
   el.touch.innerHTML = `
     <div class="tp-stick" id="tpStick" aria-label="Virtual stick"><div class="tp-knob" id="tpKnob"></div></div>
     <div class="tp-mods">
       <button class="tp-btn tp-mod" data-m="sharp" aria-label="Sharp">${G.modIcon('sharp', S.scheme)}</button>
       <button class="tp-btn tp-mod" data-m="flat" aria-label="Flat">${G.modIcon('flat', S.scheme)}</button>
     </div>
-    <div class="tp-notes" style="height:${n64 ? 200 : 186}px;width:262px">${notes}</div>
-    <p class="tp-help">Tap or click the buttons. Drag the stick up and down to bend, and side to side for vibrato. Multi-touch works.</p>`;
+    <div class="tp-notes ${n64 ? 'tp-n64' : 'tp-remake'}">${notes}</div>
+    <p class="tp-help">Hold a note button to play. Hold ♯ or ♭ at the same time for half steps. Drag the stick up or down to bend, and sideways for vibrato.</p>`;
   const T = input.touch;
   $$('.tp-note', el.touch).forEach((b) => hold(b, () => { T.notes[b.dataset.n] = true; }, () => { T.notes[b.dataset.n] = false; }));
   $$('.tp-mod', el.touch).forEach((b) => hold(b, () => { T[b.dataset.m] = true; }, () => { T[b.dataset.m] = false; }));
@@ -630,61 +622,55 @@ function getSong(id) {
   return base;
 }
 
-function seqPreview(song, max = 12) {
-  if (song.seq) return `<div class="sc-seq">${song.seq.map((id) => icon(id)).join('')}</div>`;
-  try {
-    const ev = songEvents(song).filter((e) => e.combo);
-    return `<div class="sc-seq small">${ev.slice(0, max).map((e) => combo(e.combo)).join('')}${ev.length > max ? `<span class="more">+${ev.length - max} more</span>` : ''}</div>`;
-  } catch (e) { return `<p class="sc-desc" style="color:var(--bad)">${esc(e.message)}</p>`; }
-}
 
-function songCard(song) {
-  const d = songDifficulty(song);
-  const tag = song.kind === 'game' ? `<span class="tag ${song.group === 'Warp' ? 'warp' : ''}">${song.id === 'scarecrow' ? 'Yours' : song.group}</span>` : `<span class="tag ${d.tag}">${d.text}</span>`;
-  let by = song.by || '';
+function songRow(song, { seq = false } = {}) {
+  let sub = song.by || song.desc || '';
   if (!song.seq) {
     const t = transposeFor(song);
-    if (t) by += `${by ? ' · ' : ''}transposed ${t > 0 ? '+' : '−'}${Math.abs(t)}`;
+    if (t) sub += `${sub ? ' · ' : ''}transposed ${t > 0 ? '+' : '−'}${Math.abs(t)}`;
   }
-  return `<article class="card song-card" data-open="${song.id}" tabindex="0">
-    <div class="sc-top"><div><h3>${esc(song.title)}</h3>${by ? `<div class="sc-by">${esc(by)}</div>` : ''}</div>${tag}</div>
-    ${seqPreview(song)}
-    ${song.desc ? `<p class="sc-desc">${esc(song.desc)}</p>` : ''}
-    <div class="sc-actions">
-      <button class="btn btn-sm" data-listen="${song.id}">▶ Listen</button>
-      <button class="btn btn-sm btn-gold" data-practice="${song.id}">Practice</button>
+  const keys = seq && song.seq ? `<div class="sr-seq">${song.seq.map((id) => icon(id)).join('')}</div>` : '<div class="sr-seq"></div>';
+  return `<div class="song-row" data-open="${song.id}" tabindex="0">
+    <div class="sr-main"><b>${esc(song.title)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>
+    ${keys}
+    <div class="sr-actions">
+      <button class="btn btn-sm" data-listen="${song.id}">Listen</button>
+      <button class="btn btn-sm" data-practice="${song.id}">Practice</button>
       ${song.kind === 'custom' ? `<button class="btn btn-sm btn-ghost" data-edit="${song.id}">Edit</button>` : ''}
       ${song.id === 'scarecrow' ? '<button class="btn btn-sm btn-ghost" data-teach="1">Re-teach</button>' : ''}
     </div>
-  </article>`;
+  </div>`;
 }
 
 function renderSongs() {
   const pg = $('#page-songs');
-  const melodies = allSongs().filter((s) => s.kind === 'game' && s.group !== 'Warp');
-  const warps = allSongs().filter((s) => s.kind === 'game' && s.group === 'Warp');
+  const game = allSongs().filter((x) => x.kind === 'game');
   const mine = customSongs();
-  const scare = S.scarecrow ? '' : `<article class="card song-card" data-teach="1"><div class="sc-top"><div><h3>Scarecrow's Song</h3><div class="sc-by">Make up your own</div></div><span class="tag">Custom</span></div><div class="sc-seq">${'<span class="combo" style="opacity:.35">?</span>'.repeat(8)}</div><p class="sc-desc">Play any 8 notes to teach it. After that it's recognized like the others.</p><div class="sc-actions"><button class="btn btn-sm btn-gold" data-teach="1">Teach it</button></div></article>`;
+  const scare = S.scarecrow ? '' : `<div class="song-row"><div class="sr-main"><b>Scarecrow's Song</b><span>Play any 8 notes to make your own song.</span></div><div class="sr-seq"></div><div class="sr-actions"><button class="btn btn-sm" data-teach="1">Teach</button></div></div>`;
+  const open = S.panels.songsMore ? 'open' : '';
+  const openEx = S.panels.songsEx ? 'open' : '';
   pg.innerHTML = `
-    <div class="page-head"><div><h1>Songs</h1><p>Press <b>Listen</b> to hear a song and see each button combination, or <b>Practice</b> to play along note by note. In free play, the ocarina melodies are recognized whenever you play them. The classics are public-domain tunes, transposed automatically so they're as easy as possible to play.</p></div>
-      <div class="songs-tools"><button class="btn btn-gold" data-new="1">+ New song</button><button class="btn" data-import="1">Import</button><button class="btn" data-exportall="1" ${mine.length ? '' : 'disabled'}>Export mine</button><input type="file" id="importFile" accept=".json,application/json" hidden></div></div>
-    <div class="section-t">Ocarina melodies</div>
-    <div class="song-grid">${melodies.map(songCard).join('')}${scare}</div>
-    <div class="section-t">Warp songs</div>
-    <div class="song-grid">${warps.map(songCard).join('')}</div>
-    <div class="section-t">My songs</div>
-    ${mine.length ? `<div class="song-grid">${mine.map(songCard).join('')}</div>` : `<div class="card" style="padding:18px 20px"><p class="sc-desc" style="font-size:15px">You haven't added any songs yet. Use <b>+ New song</b> to type in a melody, for example a longer theme you know by ear, or use the <b>Recorder</b> on the Play page to capture what you play. Songs are saved in this browser, and you can export them to share.</p></div>`}
-    <div class="section-t">Classics</div>
-    <div class="song-grid">${CLASSIC_SONGS.map((s) => songCard(getSong(s.id))).join('')}</div>
-    <div class="section-t">Exercises</div>
-    <div class="song-grid">${EXERCISES.map((s) => songCard(getSong(s.id))).join('')}</div>`;
+    <div class="page-head"><div><h1>Songs</h1><p>Listen to a song to hear it and see the buttons, or practice it note by note.</p></div></div>
+    <div class="section-t">Ocarina songs</div>
+    <div class="card song-list">${game.map((x) => songRow(x, { seq: true })).join('')}${scare}</div>
+    <div class="section-t section-row"><span>My songs</span>
+      <span class="songs-tools"><button class="btn btn-sm" data-new="1">New song</button><button class="btn btn-sm" data-import="1">Import</button>${mine.length ? '<button class="btn btn-sm" data-exportall="1">Export</button>' : ''}<input type="file" id="importFile" accept=".json,application/json" hidden></span></div>
+    ${mine.length ? `<div class="card song-list">${mine.map((x) => songRow(x)).join('')}</div>` : '<p class="muted">Type in a melody with New song, or record one from the Play page. Songs are saved in this browser.</p>'}
+    <details class="more" data-panel="songsEx" ${openEx}><summary>Practice exercises <span class="muted">(${EXERCISES.length})</span></summary>
+      <div class="card song-list">${EXERCISES.map((x) => songRow(getSong(x.id))).join('')}</div></details>
+    <details class="more" data-panel="songsMore" ${open}><summary>Other melodies <span class="muted">(${CLASSIC_SONGS.length} public-domain tunes)</span></summary>
+      <div class="card song-list">${CLASSIC_SONGS.map((x) => songRow(getSong(x.id))).join('')}</div></details>`;
 }
+$('#page-songs').addEventListener('toggle', (e) => {
+  const d = e.target; if (!d.dataset || !d.dataset.panel) return;
+  S.panels[d.dataset.panel] = d.open; save();
+}, true);
 
 $('#page-songs').addEventListener('click', (e) => {
   const t = e.target.closest('[data-listen],[data-practice],[data-edit],[data-new],[data-import],[data-exportall],[data-teach],[data-open]');
   if (!t) return;
   const d = t.dataset;
-  if (d.listen) { const s = getSong(d.listen); listen(s); toast(`Listening: ${s.title}`); }
+  if (d.listen) listen(getSong(d.listen));
   else if (d.practice) startPractice(getSong(d.practice));
   else if (d.edit) openEditor(getSong(d.edit));
   else if (d.new) openEditor(null);
@@ -694,7 +680,7 @@ $('#page-songs').addEventListener('click', (e) => {
   else if (d.open) openSong(getSong(d.open));
 });
 $('#page-songs').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target.matches('.song-card[data-open]')) openSong(getSong(e.target.dataset.open));
+  if (e.key === 'Enter' && e.target.matches('.song-row[data-open]')) openSong(getSong(e.target.dataset.open));
 });
 $('#page-songs').addEventListener('change', async (e) => {
   if (e.target.id !== 'importFile') return;
@@ -915,8 +901,8 @@ const SETTINGS = {
   sound: [
     { key: 'volume', type: 'range', label: 'Volume', min: 0, max: 1, step: 0.01, num: true, fmt: (v) => `${Math.round(v * 100)}%` },
     { key: 'reverb', type: 'range', label: 'Reverb', desc: 'How much room the sound has.', min: 0, max: 1, step: 0.01, num: true, fmt: (v) => `${Math.round(v * 100)}%` },
-    { key: 'timbre', type: 'select', label: 'Tone', options: [['glaze', 'Glazed ceramic'], ['clay', 'Breathy clay'], ['pure', 'Pure / crystal']] },
-    { key: 'octave', type: 'select', label: 'Register', desc: 'Note names follow the usual game charts (D4 to D5). This setting only moves the sound.', num: true, options: [[0, 'As written'], [1, 'One octave up'], [-1, 'One octave down']] },
+    { key: 'timbre', type: 'select', label: 'Sound', desc: 'Recorded uses a real clay ocarina. The synthesized tones are lighter alternatives.', options: [['real', 'Recorded ocarina'], ['glaze', 'Synthesized, soft'], ['clay', 'Synthesized, breathy'], ['pure', 'Synthesized, pure']] },
+    { key: 'octave', type: 'select', label: 'Register', desc: 'Note names follow the usual game charts (D4 to D5). This only changes how high it sounds.', num: true, options: [[1, 'Alto ocarina (standard)'], [2, 'Soprano ocarina'], [0, 'Bass ocarina']] },
   ],
   display: [
     { key: 'labelStyle', type: 'select', label: 'Button labels', desc: 'Auto picks labels to match the controller you connect.', options: [['auto', 'Auto-detect'], ['nintendo', 'Nintendo (L R A Y X)'], ['xbox', 'Xbox (LB RB B X Y)'], ['ps', 'PlayStation (L1 R1 ○ □ △)']] },
@@ -924,8 +910,9 @@ const SETTINGS = {
     { key: 'showKeys', type: 'toggle', label: 'Keyboard hints', desc: 'Show key labels on the touch pad.' },
   ],
   songs: [
+    { key: 'detectSongs', type: 'toggle', label: 'Recognize songs', desc: 'Show a notice when the notes you play match an ocarina song.' },
     { key: 'recognition', type: 'select', label: 'Song recognition', desc: 'Strict matches only notes played with no modifier or bend, as the remake does.', options: [['buttons', 'Any fingering'], ['strict', 'Natural notes only']] },
-    { key: 'replaySong', type: 'toggle', label: 'Replay recognized songs', desc: 'After you play an ocarina melody, it plays back for you.' },
+    { key: 'replaySong', type: 'toggle', label: 'Replay recognized songs', desc: 'After a song is recognized, play it back once.' },
   ],
 };
 
@@ -992,7 +979,7 @@ $('#page-controls').addEventListener('input', (e) => {
   if (k === 'reverb') synth.setReverb(v);
   if (k === 'vibratoRate') synth.setVibratoRate(v);
   if (k === 'vibratoDepth') synth.lastVib = -1;
-  if (k === 'timbre') synth.applyTimbre();
+  if (k === 'timbre') { if (synth.sounding) synth.noteOff(); synth.applyTimbre(); }
 });
 $('#page-controls').addEventListener('change', (e) => {
   const k = e.target.dataset.set; if (!k) return;
@@ -1145,7 +1132,7 @@ function updatePadStatus() {
   if (sig === padSig) return;
   padSig = sig;
   const b = $('#padStatus');
-  if (!pads.length) { b.className = 'pad-status'; b.innerHTML = '<i class="dot"></i><span>Keyboard ready. Connect a controller.</span>'; }
+  if (!pads.length) { b.className = 'pad-status'; b.innerHTML = '<i class="dot"></i><span>No controller</span>'; }
   else {
     const p = pads[0];
     const warn = p.mapping !== 'standard' && !S.bindings[`${S.scheme}|${p.id}`];

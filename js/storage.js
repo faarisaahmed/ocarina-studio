@@ -8,14 +8,16 @@ export const DEFAULTS = {
   bendMode: 'smooth',     // 'smooth' (analog) | 'snap' (half/whole steps)
   vibratoDepth: 45,       // cents at full tilt
   vibratoRate: 5.8,       // Hz
-  octave: 0,              // sound register shift in octaves
+  octave: 1,              // sound register shift in octaves (1 = alto ocarina)
   volume: 0.75,
-  reverb: 0.3,
-  timbre: 'glaze',        // 'glaze' | 'clay' | 'pure'
+  reverb: 0.22,
+  timbre: 'real',         // 'real' (recorded) | 'glaze' | 'clay' | 'pure'
+  soundVersion: 2,
   skin: 'blue',           // 'blue' | 'clay'
   noteNames: 'sharp',     // 'sharp' | 'flat' | 'both'
   recognition: 'buttons', // 'buttons' (any modifiers) | 'strict' (naturals only)
-  replaySong: true,
+  detectSongs: true,
+  replaySong: false,
   visual: 'both',         // 'ocarina' | 'controller' | 'both'
   showKeys: true,
   partial: false,
@@ -33,7 +35,11 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...clone(DEFAULTS), ...JSON.parse(raw) };
+    if (raw) {
+      const s = { ...clone(DEFAULTS), ...JSON.parse(raw) };
+      if ((s.soundVersion || 1) < 2) Object.assign(s, { timbre: 'real', octave: 1, reverb: 0.22, soundVersion: 2 });
+      return s;
+    }
   } catch (e) { /* storage unavailable */ }
   return clone(DEFAULTS);
 }

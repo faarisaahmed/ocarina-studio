@@ -30,6 +30,6 @@ Then open http://localhost:8000. Controllers only show up in the browser after y
 
 ## Credits
 
-- All audio is synthesized in the browser with the Web Audio API.
+- The ocarina sound is a real clay ocarina: one note from "Ocarina de barro (impro)" by Luis Alvaz (CC BY-SA 4.0, Wikimedia Commons), looped and pitch-shifted in the browser. See `assets/audio/CREDITS.md`.
 
 Ocarina Studio is an unofficial fan project. It isn't affiliated with or endorsed by Nintendo. "Nintendo 64", "Nintendo Switch" and related names are trademarks of Nintendo.

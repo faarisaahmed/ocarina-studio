@@ -3,10 +3,15 @@
 import { midiToFreq } from './music.js';
 
 const TIMBRES = {
+  real: { h: [1, 0.07, 0.03, 0.01], breath: 0.035, chiff: 0.2, lp: 7000 },
   glaze: { h: [1, 0.07, 0.03, 0.01], breath: 0.035, chiff: 0.2, lp: 3400 },
   clay: { h: [1, 0.14, 0.06, 0.025], breath: 0.075, chiff: 0.3, lp: 2600 },
   pure: { h: [1, 0.015, 0.004, 0], breath: 0.012, chiff: 0.1, lp: 5000 },
 };
+
+// Recorded clay ocarina note (B5), trimmed to a seamless loop. Source: "Ocarina de barro
+// (impro)" by Luis Alvaz, CC BY-SA 4.0, via Wikimedia Commons. See assets/audio/CREDITS.md.
+const SAMPLE = { url: 'assets/audio/ocarina-b5.wav', root: 82.95, loopStart: 0.05499, loopEnd: 0.59567 };
 
 function hold(p, t) {
   if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t);
@@ -77,7 +82,71 @@ export class OcarinaSynth {
     this.chiff.connect(this.dry); this.chiff.connect(this.wet);
 
     this.noise.start(); this.lfo.start();
+
+    // Sampler bus: recorded ocarina voices -> tremolo -> gentle low-pass -> dry/wet
+    this.sBus = ctx.createGain();
+    this.sBus.gain.value = 0.62;
+    this.sBus.connect(this.trem);
+    this.voice = null;
+    this.sample = null;
+    fetch(SAMPLE.url).then((r) => r.arrayBuffer()).then((ab) => ctx.decodeAudioData(ab)).then((buf) => {
+      this.sample = { ...SAMPLE, buffer: buf };
+    }).catch(() => { this.sample = null; });
+
     this.applyTimbre();
+  }
+
+  get useSample() { return this.s.timbre === 'real' && !!this.sample; }
+
+  rateFor(midi) { return Math.pow(2, (midi - this.sample.root) / 12); }
+
+  /** Start a recorded-ocarina voice. */
+  sampleOn(midi, slur) {
+    const ctx = this.ctx, t = ctx.currentTime, sm = this.sample;
+    const src = ctx.createBufferSource();
+    src.buffer = sm.buffer;
+    src.loop = true;
+    src.loopStart = sm.loopStart;
+    src.loopEnd = sm.loopEnd;
+    const rate = this.rateFor(midi);
+    if (slur) {
+      src.playbackRate.setValueAtTime(rate, t);
+    } else {
+      // breath builds up: the pitch settles from slightly flat
+      src.playbackRate.setValueAtTime(rate * Math.pow(2, -22 / 1200), t);
+      src.playbackRate.setTargetAtTime(rate, t + 0.005, 0.018);
+    }
+    this.lfoCents.connect(src.detune);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    if (slur) g.gain.setTargetAtTime(1, t, 0.008);
+    else { g.gain.linearRampToValueAtTime(1.08, t + 0.03); g.gain.setTargetAtTime(1, t + 0.03, 0.05); }
+    src.connect(g); g.connect(this.sBus);
+    const offset = slur ? sm.loopStart + Math.random() * (sm.loopEnd - sm.loopStart - 0.05) : 0;
+    src.start(t, offset);
+    const old = this.voice;
+    if (old) this.releaseVoice(old, slur ? 0.012 : 0.02, false);
+    this.voice = { src, g, rate };
+    // tongued articulation: a short breath "t" at the start of each note
+    const c = this.chiff.gain;
+    hold(c, t);
+    c.linearRampToValueAtTime(slur ? 0.035 : 0.09, t + 0.006);
+    c.setTargetAtTime(0, t + 0.01, 0.018);
+    this.chiffF.frequency.setValueAtTime(Math.min(9000, midiToFreq(midi) * 3), t);
+    this.sounding = true;
+    this.lastMidi = midi;
+  }
+
+  releaseVoice(v, tc, droop) {
+    const t = this.ctx.currentTime;
+    hold(v.g.gain, t);
+    v.g.gain.setTargetAtTime(0, t, tc);
+    if (droop) {
+      hold(v.src.playbackRate, t);
+      v.src.playbackRate.setTargetAtTime(v.rate * Math.pow(2, -35 / 1200), t, tc * 1.6);
+    }
+    v.src.stop(t + tc * 8 + 0.05);
+    v.src.onended = () => { try { this.lfoCents.disconnect(v.src.detune); } catch (e) { /* already gone */ } };
   }
 
   resume() { if (this.ctx && this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); }
@@ -95,7 +164,7 @@ export class OcarinaSynth {
     return buf;
   }
 
-  get timbre() { return TIMBRES[this.s.timbre] || TIMBRES.glaze; }
+  get timbre() { return TIMBRES[this.s.timbre] || TIMBRES.real; }
 
   applyTimbre() {
     if (!this.ctx) return;
@@ -123,6 +192,7 @@ export class OcarinaSynth {
 
   noteOn(midi, legato = false) {
     if (!this.ctx) return;
+    if (this.useSample) { this.sampleOn(midi, legato && this.sounding); return; }
     const t = this.ctx.currentTime, T = this.timbre;
     const slur = legato && this.sounding;
     this.setFreqs(midi, t, slur ? 'fast' : 'jump');
@@ -146,11 +216,19 @@ export class OcarinaSynth {
   setPitch(midi) {
     if (!this.ctx || !this.sounding) return;
     if (this.lastMidi != null && Math.abs(midi - this.lastMidi) < 0.002) return;
+    if (this.voice && this.useSample) {
+      const t = this.ctx.currentTime, p = this.voice.src.playbackRate;
+      const rate = this.rateFor(midi);
+      hold(p, t); p.setTargetAtTime(rate, t, 0.012);
+      this.voice.rate = rate; this.lastMidi = midi;
+      return;
+    }
     this.setFreqs(midi, this.ctx.currentTime, 'glide');
   }
 
   noteOff() {
     if (!this.ctx || !this.sounding) return;
+    if (this.voice) { this.releaseVoice(this.voice, 0.05, true); this.voice = null; this.sounding = false; return; }
     const t = this.ctx.currentTime, g = this.env.gain;
     hold(g, t);
     g.setTargetAtTime(0, t, 0.045);
