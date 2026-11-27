@@ -246,28 +246,32 @@ body.has-expanded { overflow: hidden; }
 .card.expanded .visual-stage.mode-both { grid-template-columns: 1fr 1fr; align-items: center; }
 .card.expanded .photo-oc, .card.expanded .photo-pad { max-width: none; }
 
-/* 3D instrument + controllers */
-.stage3d { position: relative; width: 100%; }
-.stage3d canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
-.stage-labels { position: absolute; inset: 0; pointer-events: none; }
-.s-lab { position: absolute; transform: translate(-50%, -50%); line-height: 0; font-size: clamp(18px, 2.6vw, 30px); opacity: 0.6; transition: opacity 0.12s, transform 0.12s; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7)); }
-.s-lab.s-mod { font-size: clamp(14px, 2vw, 22px); }
-.s-lab.on { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
-.s-chip { line-height: 1.1; font-size: 13px; font-weight: 900; color: var(--gold-hi); background: rgba(4, 16, 10, 0.82); border: 1px solid var(--line-2); border-radius: 9px; padding: 4px 9px; white-space: nowrap; opacity: 1; text-align: center; }
-.s-chip small { display: block; font-size: 9px; color: var(--muted); font-weight: 800; letter-spacing: 0.04em; }
-.s-chip.on { background: var(--gold); color: #1c1404; box-shadow: 0 0 18px rgba(244, 210, 120, 0.85); transform: translate(-50%, -50%) scale(1.08); }
-.s-chip.on small { color: #3a2c08; }
-.s-air { opacity: 1; }
-.s-air .air { position: relative; display: block; width: 60px; height: 60px; }
-.s-air .air i { position: absolute; left: 50%; top: 50%; width: 30%; height: 30%; border-radius: 50%; border: 3px solid transparent; border-bottom-color: var(--cyan); transform: translate(-50%, -50%) rotate(35deg); opacity: 0; }
-.s-air.on .air i { animation: air 0.9s ease-out infinite; }
-.s-air.on .air i:nth-child(2) { animation-delay: 0.2s; }
-.s-air.on .air i:nth-child(3) { animation-delay: 0.4s; }
-@keyframes air { 0% { opacity: 0; width: 20%; height: 20%; } 30% { opacity: 0.9; } 100% { opacity: 0; width: 120%; height: 120%; } }
-.stage-loading { aspect-ratio: 16 / 10; display: grid; place-items: center; color: var(--muted); font-weight: 800; }
-.vis-pad .stage3d { max-width: 620px; margin: 0 auto; }
-.card.expanded .vis-pad .stage3d { max-width: none; }
-
+/* Flat 2D instrument + controllers */
+.pad2d { display: block; width: 100%; height: auto; }
+.pad-n64 { max-width: 560px; margin: 0 auto; }
+.pad-pro { max-width: 620px; margin: 0 auto; }
+.pad2d .pad-emb, .pad2d .pad-letter, .pad2d .pad-tag { text-anchor: middle; dominant-baseline: central; font-family: Nunito, Arial, sans-serif; font-weight: 900; pointer-events: none; }
+.pad2d .pad-letter { font-size: 30px; }
+.pad2d .pad-tag { font-size: 30px; fill: #f4f4f4; }
+.pad2d .pad-note { text-anchor: middle; font-family: Nunito, Arial, sans-serif; font-weight: 800; font-size: 24px; fill: #9aa29d; }
+.pad2d .pk > :first-child { transition: fill 0.06s; }
+.pad2d .pk.on > :first-child { fill: #f2c94c; stroke: #fff4c7; stroke-width: 6; }
+.pad2d .pk.on .pad-tag, .pad2d .pk.on .pad-letter, .pad2d .pk.on .pad-emb { fill: #1c1404; }
+.pad2d .pk.on path:not(:first-child) { fill: #1c1404; }
+.pad2d .pk-sh.on > :first-child { stroke-width: 4; }
+.pad2d .stick.on circle:first-child { stroke: #f2c94c; stroke-width: 8; }
+.ocarina2d { max-width: 640px; margin: 0 auto; }
+.ocarina2d .hole.on > circle:first-child { fill: #f2c94c; }
+.ocarina2d .hole.on .pit { fill: #f7dc7a; }
+.ocarina2d .oc-lab { overflow: visible; }
+.ocarina2d .oc-lab div { width: 60px; height: 60px; display: grid; place-items: center; font-size: 40px; line-height: 0; opacity: 0.55; }
+.ocarina2d .oc-lab[data-l="sharp"] div, .ocarina2d .oc-lab[data-l="flat"] div { font-size: 30px; }
+.ocarina2d .oc-lab.on div { opacity: 1; }
+.ocarina2d .oc-air path { fill: none; stroke: var(--cyan); stroke-width: 6; stroke-linecap: round; opacity: 0; }
+.ocarina2d.sounding .oc-air path { animation: airblink 0.8s ease-out infinite; }
+.ocarina2d.sounding .oc-air path:nth-child(2) { animation-delay: 0.2s; }
+@keyframes airblink { 0%, 100% { opacity: 0; } 40% { opacity: 0.9; } }
+.ocarina2d .oc-note { font-size: 22px; }
 .floaty { position: absolute; pointer-events: none; font-size: 28px; color: var(--gold-hi); text-shadow: 0 0 12px rgba(217, 185, 104, 0.8); animation: floaty 1.6s ease-out forwards; z-index: 2; font-family: var(--font-sym); }
 @keyframes floaty { 0% { opacity: 0; transform: translate(0, 0) scale(0.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), -110px) scale(1.15) rotate(var(--rot)); } }
 

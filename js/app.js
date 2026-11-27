@@ -4,6 +4,7 @@ import { OcarinaSynth } from './audio.js';
 import { Input, SCHEMES, KEY_HELP, detectStyle, looksN64 } from './input.js';
 import { Engine } from './engine.js';
 import * as G from './graphics.js';
+import * as P2 from './pads2d.js';
 import { GAME_SONGS, CLASSIC_SONGS, EXERCISES } from './songs.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -156,14 +157,12 @@ $('#visualSeg').addEventListener('click', (e) => {
   S.visual = b.dataset.visual; save();
   $$('#visualSeg button').forEach((x) => x.classList.toggle('on', x === b));
   el.stage.className = `visual-stage mode-${S.visual}`;
-  vis.dirty = true;
 });
 
 function toggleExpand(card) {
   const on = !card.classList.contains('expanded');
   $$('.card.expanded').forEach((c) => c.classList.remove('expanded'));
   card.classList.toggle('expanded', on);
-  vis.dirty = true;
   document.body.classList.toggle('has-expanded', on);
   const btn = $('[data-act="expand"]', card);
   if (btn) { btn.textContent = on ? '✕' : '⤢'; btn.title = on ? 'Close' : 'Expand'; }
@@ -226,42 +225,42 @@ function updateNote(f) {
   }
 }
 
-// ---- Instrument visuals (3D, loaded lazily)
+// ---- Instrument visuals (flat 2D drawings)
 const vis = {};
-let T3 = null, t3Failed = false;
-import('./three-view.js').then((m) => {
-  if (!m.webglAvailable()) throw new Error('WebGL is not available');
-  T3 = m; buildViews();
-}).catch((err) => { t3Failed = true; console.warn(err); buildViews(); });
-
 function buildViews() {
-  if (vis.oc3d) { vis.oc3d.dispose(); vis.oc3d = null; }
-  if (vis.pad3d) { vis.pad3d.dispose(); vis.pad3d = null; }
-  if (t3Failed) {
-    el.oc.innerHTML = el.pad.innerHTML = '<p class="sc-desc" style="text-align:center;padding:30px">3D view needs WebGL, which isn\'t available in this browser.</p>';
-    return;
-  }
-  if (!T3) { el.oc.innerHTML = el.pad.innerHTML = '<div class="stage-loading">Loading 3D…</div>'; return; }
-  el.oc.innerHTML = ''; el.pad.innerHTML = '';
   const icons = Object.fromEntries(M.NOTE_IDS.map((id) => [id, icon(id)]));
   icons.sharp = G.modIcon('sharp', S.scheme); icons.flat = G.modIcon('flat', S.scheme);
-  vis.oc3d = T3.createOcarinaView(el.oc, { icons, skin: S.skin });
+  el.oc.innerHTML = P2.ocarinaSVG(icons);
   const F = G.FACE[STY];
-  vis.pad3d = T3.createPadView(el.pad, S.scheme === 'n64' ? 'n64' : 'pro', { style: STY, faces: { ...F, south: { nintendo: 'B', xbox: 'A', ps: '✕' }[STY] } });
-  vis.dirty = true;
+  el.pad.innerHTML = S.scheme === 'n64' ? P2.n64SVG() : P2.proSVG({ ...F, south: { nintendo: 'B', xbox: 'A', ps: '✕' }[STY] });
+  vis.ocSvg = $('svg', el.oc); vis.rig = $('.oc-rig', el.oc);
+  vis.ocParts = $$('[data-k]', el.oc); vis.ocLabels = $$('[data-l]', el.oc);
+  vis.padParts = $$('[data-k]', el.pad);
+  vis.stick = $('.stick', el.pad);
+  vis.stickR = S.scheme === 'n64' ? 34 : 22;
 }
 
-let idleFrames = 0;
+let wobbleT = 0;
 function updateVisuals(f) {
-  const busy = f.active || f.s.sharp || f.s.flat || Math.abs(f.s.bendY) > 0.01 || Math.abs(f.s.vibX) > 0.01 || NOTE_IDS_ANY(f.s);
-  // Keep rendering while anything is happening, then let the glow fade out and stop.
-  idleFrames = busy || vis.dirty ? 0 : idleFrames + 1;
-  vis.dirty = false;
-  if (idleFrames > 40) return;
-  if (vis.oc3d && S.visual !== 'controller') vis.oc3d.update(f, f.s, f.dt);
-  if (vis.pad3d && S.visual !== 'ocarina') vis.pad3d.update(f, f.s, f.dt);
+  const s = f.s;
+  const isOn = (k) => (k === 'sharp' ? s.sharp : k === 'flat' ? s.flat : null);
+  if (vis.ocParts) {
+    for (const h of vis.ocParts) { const k = h.dataset.k; const m = isOn(k); h.classList.toggle('on', m === null ? k === f.active : !!m); }
+    for (const l of vis.ocLabels) { const k = l.dataset.l; const m = isOn(k); l.classList.toggle('on', m === null ? k === f.active : !!m); }
+    wobbleT += f.dt;
+    const wob = f.active ? Math.sin(wobbleT * Math.PI * 2 * S.vibratoRate) * f.vib * 1.6 : 0;
+    const tilt = f.active ? -f.bend * 2 : 0;
+    vis.rig.setAttribute('transform', `rotate(${(tilt + wob).toFixed(2)} 560 250)`);
+    vis.ocSvg.classList.toggle('sounding', !!f.active);
+  }
+  if (vis.padParts) {
+    for (const b of vis.padParts) { const k = b.dataset.k; const m = isOn(k); b.classList.toggle('on', m === null ? !!s.notes[k] : !!m); }
+    if (vis.stick) {
+      vis.stick.setAttribute('transform', `translate(${(s.vibX * vis.stickR).toFixed(1)} ${(-s.bendY * vis.stickR).toFixed(1)})`);
+      vis.stick.classList.toggle('on', Math.abs(s.bendY) > 0.05 || Math.abs(s.vibX) > 0.05);
+    }
+  }
 }
-const NOTE_IDS_ANY = (s) => M.NOTE_IDS.some((id) => s.notes[id]);
 
 let floatCount = 0;
 function spawnFloaty() {
@@ -269,8 +268,8 @@ function spawnFloaty() {
   const n = document.createElement('span');
   n.className = 'floaty';
   n.textContent = ['♪', '♫', '♩', '♬'][Math.floor(Math.random() * 4)];
-  n.style.left = `${el.oc.offsetLeft + el.oc.offsetWidth * 0.2}px`;
-  n.style.top = `${el.oc.offsetTop + el.oc.offsetHeight * 0.7}px`;
+  n.style.left = `${el.oc.offsetLeft + el.oc.offsetWidth * 0.12}px`;
+  n.style.top = `${el.oc.offsetTop + el.oc.offsetHeight * 0.8}px`;
   n.style.setProperty('--dx', `${-40 - Math.random() * 60}px`);
   n.style.setProperty('--rot', `${(Math.random() - 0.5) * 50}deg`);
   el.stage.appendChild(n);
@@ -932,7 +931,6 @@ const SETTINGS = {
   display: [
     { key: 'labelStyle', type: 'select', label: 'Button labels', desc: 'Auto picks labels to match the controller you connect.', options: [['auto', 'Auto-detect'], ['nintendo', 'Nintendo (L R A Y X)'], ['xbox', 'Xbox (LB RB B X Y)'], ['ps', 'PlayStation (L1 R1 ○ □ △)']] },
     { key: 'noteNames', type: 'select', label: 'Note names', options: [['sharp', 'Sharps (C♯)'], ['flat', 'Flats (D♭)'], ['both', 'Both']] },
-    { key: 'skin', type: 'select', label: 'Ocarina glaze', options: [['blue', 'Deep blue'], ['turquoise', 'Turquoise crackle (natural)'], ['clay', 'Terracotta']] },
     { key: 'showKeys', type: 'toggle', label: 'Keyboard hints', desc: 'Show key labels on the touch pad.' },
   ],
   songs: [
@@ -1012,7 +1010,6 @@ $('#page-controls').addEventListener('change', (e) => {
   if (k === 'labelStyle') refreshStyle(true);
   else if (['skin', 'showKeys', 'noteNames', 'octave'].includes(k)) { fresh.play = false; fresh.notes = false; fresh.songs = false; if (k !== 'skin') lastNoteKey = ''; }
   if (k === 'octave' && synth.sounding) synth.noteOff();
-  if (k === 'skin') fresh.play = false;
 });
 
 let testerTick = 0;

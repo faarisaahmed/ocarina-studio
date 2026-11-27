@@ -23,17 +23,17 @@ export function noteIcon(id, scheme, style = 'nintendo', o = {}) {
   const P = pos(o);
   if (scheme === 'n64') {
     if (id === 'a') {
-      return `<svg ${P} class="${cls}" viewBox="0 0 100 100" role="img" aria-label="A"><circle cx="50" cy="50" r="44" fill="url(#g-n64a)" stroke="#173a8a" stroke-width="5"/><ellipse cx="42" cy="32" rx="20" ry="10" fill="#fff" opacity=".22"/><text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-size="54" font-weight="900" fill="#fff" font-family="Nunito, sans-serif">A</text></svg>`;
+      return `<svg ${P} class="${cls}" viewBox="0 0 100 100" role="img" aria-label="A"><circle cx="50" cy="50" r="44" fill="#2a3eae" stroke="#1f2f88" stroke-width="5"/><text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-size="54" font-weight="900" fill="#fff" font-family="Nunito, sans-serif">A</text></svg>`;
     }
-    return `<svg ${P} class="${cls}" viewBox="0 0 100 100" role="img" aria-label="${N64_NAMES[id]}"><circle cx="50" cy="50" r="44" fill="url(#g-n64c)" stroke="#9c7410" stroke-width="5"/><ellipse cx="42" cy="30" rx="20" ry="9" fill="#fff" opacity=".3"/><path d="M50 20 L76 64 L24 64 Z" transform="rotate(${ROT[id]} 50 50)" fill="#6b4a00" opacity=".85" stroke-linejoin="round" stroke="#6b4a00" stroke-width="4"/></svg>`;
+    return `<svg ${P} class="${cls}" viewBox="0 0 100 100" role="img" aria-label="${N64_NAMES[id]}"><circle cx="50" cy="50" r="44" fill="#f4cb1d" stroke="#b8900a" stroke-width="5"/><path d="M50 22 L74 62 L26 62 Z" transform="rotate(${ROT[id]} 50 50)" fill="#a07a00" stroke-linejoin="round" stroke="#a07a00" stroke-width="4"/></svg>`;
   }
   const label = FACE[style][id];
   const col = NOTE_COLORS[id];
   if (id === 'a' || id === 'cd') {
-    return `<svg ${P} class="${cls}" viewBox="0 0 100 100" role="img" aria-label="${label}"><rect x="5" y="24" width="90" height="52" rx="24" fill="#1b2134" stroke="${col}" stroke-width="5"/><rect x="14" y="30" width="72" height="12" rx="6" fill="#fff" opacity=".08"/><text x="50" y="51" text-anchor="middle" dominant-baseline="central" font-size="${label.length > 1 ? 32 : 38}" font-weight="900" fill="#fff" font-family="Nunito, sans-serif">${label}</text></svg>`;
+    return `<svg ${P} class="${cls}" viewBox="0 0 100 100" role="img" aria-label="${label}"><rect x="5" y="24" width="90" height="52" rx="24" fill="#1b2134" stroke="${col}" stroke-width="5"/><text x="50" y="51" text-anchor="middle" dominant-baseline="central" font-size="${label.length > 1 ? 32 : 38}" font-weight="900" fill="#fff" font-family="Nunito, sans-serif">${label}</text></svg>`;
   }
   const sym = style === 'ps';
-  return `<svg ${P} class="${cls}" viewBox="0 0 100 100" role="img" aria-label="${label}"><circle cx="50" cy="50" r="43" fill="#1b2134" stroke="${col}" stroke-width="6"/><ellipse cx="42" cy="30" rx="20" ry="9" fill="#fff" opacity=".08"/><text x="50" y="${sym ? 50 : 52}" text-anchor="middle" dominant-baseline="central" font-size="${sym ? 52 : 50}" font-weight="900" fill="${sym ? col : '#fff'}" font-family="Nunito, 'DejaVu Sans', sans-serif">${label}</text></svg>`;
+  return `<svg ${P} class="${cls}" viewBox="0 0 100 100" role="img" aria-label="${label}"><circle cx="50" cy="50" r="43" fill="#1b2134" stroke="${col}" stroke-width="6"/><text x="50" y="${sym ? 50 : 52}" text-anchor="middle" dominant-baseline="central" font-size="${sym ? 52 : 50}" font-weight="900" fill="${sym ? col : '#fff'}" font-family="Nunito, 'DejaVu Sans', sans-serif">${label}</text></svg>`;
 }
 
 export function modIcon(kind, scheme, o = {}) {
