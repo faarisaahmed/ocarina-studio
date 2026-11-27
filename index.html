@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ocarina Studio</title>
+  <meta name="description" content="Play a virtual ocarina with your game controller, using N64-style or Switch 2 remake controls. Includes pitch bend, vibrato, a song library and a full note chart.">
+  <meta name="theme-color" content="#030d08">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Shared SVG gradients used by inline icons -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <radialGradient id="g-n64a" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#7fb0ff"/><stop offset=".55" stop-color="#2f6ae0"/><stop offset="1" stop-color="#1b45a8"/></radialGradient>
+      <radialGradient id="g-n64c" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#fff0a8"/><stop offset=".5" stop-color="#f6c445"/><stop offset="1" stop-color="#d49a16"/></radialGradient>
+    </defs>
+  </svg>
+
+  <canvas id="motes" aria-hidden="true"></canvas>
+
+  <header class="topbar">
+    <a class="brand" href="#/play" aria-label="Ocarina Studio home">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><use href="assets/favicon.svg#mark"/></svg>
+      <span class="brand-text">Ocarina <em>Studio</em></span>
+    </a>
+    <nav class="tabs" aria-label="Pages">
+      <a href="#/play" data-page="play">Play</a>
+      <a href="#/songs" data-page="songs">Songs</a>
+      <a href="#/notes" data-page="notes">Note Chart</a>
+      <a href="#/controls" data-page="controls">Controls</a>
+      <a href="#/tips" data-page="tips">Tips</a>
+    </nav>
+    <button class="pad-status" id="padStatus" title="Controller status"></button>
+  </header>
+
+  <main id="main">
+    <!-- PLAY -->
+    <section class="page" id="page-play" data-page="play">
+      <div class="play-head">
+        <div class="seg" id="schemeSeg" role="radiogroup" aria-label="Control scheme">
+          <button data-scheme="n64" role="radio">N64 Original</button>
+          <button data-scheme="remake" role="radio">Switch 2 Remake</button>
+        </div>
+        <p class="play-hint" id="playHint"></p>
+      </div>
+
+      <div class="play-grid">
+        <div class="play-col">
+        <article class="card card-note" data-card="note">
+          <header class="card-h"><h2>Now Playing</h2>
+            <div class="card-tools"><button class="ic" data-act="expand" title="Expand" aria-label="Expand">⤢</button><button class="ic" data-act="collapse" title="Collapse" aria-label="Collapse">▾</button></div>
+          </header>
+          <div class="card-b">
+            <div class="big-note" id="bigNote">
+              <div class="bn-glyph"><span class="bn-letter" id="bnLetter">—</span><span class="bn-acc" id="bnAcc"></span><span class="bn-oct" id="bnOct"></span></div>
+              <div class="bn-sub"><span id="bnAlt"></span><span id="bnHz">Press a note</span></div>
+            </div>
+            <div class="meters">
+              <div class="meter">
+                <div class="meter-l"><span>Bend</span><b id="bendVal">0.00</b></div>
+                <div class="bend-track"><i class="tick" style="left:0%">−2</i><i class="tick" style="left:25%">−1</i><i class="tick" style="left:50%">0</i><i class="tick" style="left:75%">+1</i><i class="tick" style="left:100%">+2</i><div class="bend-fill" id="bendFill"></div><div class="bend-dot" id="bendDot"></div></div>
+              </div>
+              <div class="meter">
+                <div class="meter-l"><span>Tuning</span><b id="centVal">±0¢</b></div>
+                <div class="cent-track"><div class="cent-zone"></div><div class="cent-needle" id="centNeedle"></div></div>
+              </div>
+              <div class="meter">
+                <div class="meter-l"><span>Vibrato</span><b id="vibVal">off</b></div>
+                <div class="vib-track"><div class="vib-fill" id="vibFill"></div></div>
+              </div>
+            </div>
+            <div class="live-combo" id="liveCombo" aria-live="off"></div>
+          </div>
+        </article>
+
+        <article class="card card-staff" data-card="staff">
+          <header class="card-h"><h2 id="staffTitle">Staff</h2>
+            <div class="card-tools"><button class="ic" id="clearStaff" title="Clear staff" aria-label="Clear staff">⟲</button><button class="ic" data-act="expand" title="Expand" aria-label="Expand">⤢</button><button class="ic" data-act="collapse" title="Collapse" aria-label="Collapse">▾</button></div>
+          </header>
+          <div class="card-b">
+            <div id="practiceBar" class="practice-bar" hidden></div>
+            <div id="staffWrap" class="staff-wrap"></div>
+            <div id="songBanner" class="song-banner" aria-live="polite"></div>
+          </div>
+        </article>
+
+        <article class="card card-touch" data-card="touch">
+          <header class="card-h"><h2>Touch &amp; Mouse Pad</h2>
+            <div class="card-tools"><button class="ic" data-act="expand" title="Expand" aria-label="Expand">⤢</button><button class="ic" data-act="collapse" title="Collapse" aria-label="Collapse">▾</button></div>
+          </header>
+          <div class="card-b"><div class="touchpad" id="touchpad"></div></div>
+        </article>
+        </div>
+        <div class="play-col">
+        <article class="card card-visual" data-card="visual">
+          <header class="card-h"><h2>Instrument</h2>
+            <div class="card-tools">
+              <div class="seg seg-sm" id="visualSeg">
+                <button data-visual="ocarina">Ocarina</button><button data-visual="controller">Controller</button><button data-visual="both">Both</button>
+              </div>
+              <button class="ic" data-act="expand" title="Expand" aria-label="Expand">⤢</button><button class="ic" data-act="collapse" title="Collapse" aria-label="Collapse">▾</button></div>
+          </header>
+          <div class="card-b">
+            <div class="visual-stage" id="visualStage">
+              <div class="vis vis-ocarina" id="ocarinaView"></div>
+              <div class="vis vis-pad" id="padView"></div>
+            </div>
+          </div>
+        </article>
+
+        
+
+        <article class="card card-rec" data-card="rec">
+          <header class="card-h"><h2>Recorder</h2>
+            <div class="card-tools"><button class="ic" data-act="collapse" title="Collapse" aria-label="Collapse">▾</button></div>
+          </header>
+          <div class="card-b" id="recorder"></div>
+        </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="page-songs" data-page="songs"></section>
+    <section class="page" id="page-notes" data-page="notes"></section>
+    <section class="page" id="page-controls" data-page="controls"></section>
+    <section class="page" id="page-tips" data-page="tips"></section>
+  </main>
+
+  <footer class="foot">
+    <p>Ocarina Studio is an unofficial fan-made instrument. It isn't affiliated with or endorsed by Nintendo. All sounds are synthesized in your browser.</p>
+  </footer>
+
+  <button class="mini-now" id="miniNow" hidden></button>
+  <div class="modal" id="modal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true">
+      <button class="modal-x" id="modalX" aria-label="Close">×</button>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <div class="start" id="start">
+    <div class="start-inner">
+      <svg class="start-mark" viewBox="0 0 64 64" aria-hidden="true"><use href="assets/favicon.svg#mark"/></svg>
+      <h1>Ocarina <em>Studio</em></h1>
+      <p class="start-sub">An ocarina for your controller</p>
+      <button class="btn btn-gold btn-lg" id="startBtn">Press Start</button>
+      <p class="start-hint">Click, tap, or press any key to turn on sound. Then pick up your controller and press a button.</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
