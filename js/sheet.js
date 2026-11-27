@@ -49,6 +49,13 @@ function chooseKey(midis) {
     const score = outside * 10 + k.count;
     if (score < bestScore) { bestScore = score; best = k; }
   }
+  if (best.dir === 0) {
+    // No key signature: spell altered notes the way the music leans (E♭/B♭ vs F♯/C♯).
+    const pcs = midis.map((m) => ((m % 12) + 12) % 12);
+    const flatSide = pcs.filter((pc) => pc === 3 || pc === 10).length;
+    const sharpSide = pcs.filter((pc) => pc === 1 || pc === 6).length;
+    best = { ...best, dir: flatSide > sharpSide ? -1 : 1 };
+  }
   return best;
 }
 
