@@ -60,39 +60,39 @@ export function n64SVG() {
   </svg>`;
 }
 
-// ---------------------------------------------------------------- Pro controller (traced, 960 x 720 space)
-const PRO = { body: '#2c2d31', line: '#141517', panel: '#303136', face: '#1e1f22', faceLine: '#101113', mark: '#ececec', well: '#1b1c1f', ring: '#d9d9d9', cap: '#2a2b2f', shoulder: '#3c3d42' };
+// ---------------------------------------------------------------- Switch 2 Pro Controller (traced, 1920 x 1920 space, front view)
+const PRO = { body: '#2b2c2f', line: '#141517', seam: '#1d1e21', face: '#2a2b2e', faceLine: '#18191b', mark: '#d4d4d4', well: '#252629', ring: '#3a3b3f', cap: '#2e2f33', capLine: '#202124', shoulder: '#d8d9db', shoulderLine: '#a9abae' };
 
 export function proSVG(labels) {
   const P = PRO;
-  const face = (k, x, y, t) => `<g class="pk" ${k ? `data-k="${k}"` : ''}><circle cx="${x}" cy="${y}" r="34" fill="${P.face}" stroke="${P.faceLine}" stroke-width="3"/><text x="${x}" y="${y + 1}" class="pad-letter" fill="${P.mark}">${t}</text></g>`;
-  const stick = (cls, x, y) => `<circle cx="${x}" cy="${y}" r="66" fill="${P.well}"/><circle cx="${x}" cy="${y}" r="54" fill="${P.ring}"/>
-    <g class="${cls}" data-cx="${x}" data-cy="${y}"><circle cx="${x}" cy="${y}" r="46" fill="${P.cap}" stroke="${P.line}" stroke-width="3"/><circle cx="${x}" cy="${y}" r="33" fill="none" stroke="${P.line}" stroke-width="2" opacity=".6"/></g>`;
-  return `<svg class="pad2d pad-pro" viewBox="0 0 960 720" role="img" aria-label="Pro Controller">
-    <g class="pk pk-sh" data-k="a"><path d="M200 150 C220 122 262 110 330 106 L420 104 L420 126 L214 166 Z" fill="${P.shoulder}"/></g>
-    <g class="pk pk-sh" data-k="cd"><path d="M834 150 C814 122 772 110 704 106 L614 104 L614 126 L820 166 Z" fill="${P.shoulder}"/></g>
-    <path class="pad-outline" d="M517 110 C640 110 730 108 790 118 C850 130 878 180 890 250 C906 340 912 440 905 520 C898 600 872 652 828 664 C788 674 760 650 744 606 C726 556 712 500 684 474 C664 458 640 454 600 454 L434 454 C394 454 370 458 350 474 C322 500 308 556 290 606 C274 650 246 674 206 664 C162 652 136 600 129 520 C122 440 128 340 144 250 C156 180 184 130 244 118 C304 108 394 110 517 110 Z"
-      fill="${P.body}" stroke="${P.line}" stroke-width="4"/>
-    <path d="M215 180 C230 150 270 140 330 138 L700 138 C760 140 800 150 815 180 L868 330 C878 400 858 432 808 438 L226 438 C176 432 156 400 166 330 Z" fill="${P.panel}" stroke="${P.line}" stroke-width="2" opacity=".9"/>
-    ${stick('stick', 283, 210)}
+  const face = (k, x, y, t) => `<g class="pk" ${k ? `data-k="${k}"` : ''}><circle cx="${x}" cy="${y}" r="72" fill="${P.face}" stroke="${P.faceLine}" stroke-width="6"/><text x="${x}" y="${y + 2}" class="pad-letter" fill="${P.mark}" font-size="62">${t}</text></g>`;
+  const stick = (cls, x, y) => `<circle cx="${x}" cy="${y}" r="160" fill="${P.well}" stroke="${P.seam}" stroke-width="5"/>
+    <g class="${cls}" data-cx="${x}" data-cy="${y}"><circle cx="${x}" cy="${y}" r="122" fill="${P.ring}" stroke="${P.capLine}" stroke-width="6"/><circle cx="${x}" cy="${y}" r="92" fill="${P.cap}" stroke="${P.capLine}" stroke-width="5"/></g>`;
+  return `<svg class="pad2d pad-pro" viewBox="0 170 1920 1490" role="img" aria-label="Switch 2 Pro Controller">
+    <g class="pk pk-sh" data-k="a"><path d="M248 470 C262 380 320 330 420 318 C500 310 560 312 600 322 L600 360 L248 470 Z" fill="${P.shoulder}" stroke="${P.shoulderLine}" stroke-width="4"/></g>
+    <g class="pk pk-sh" data-k="cd"><path d="M1672 470 C1658 380 1600 330 1500 318 C1420 310 1360 312 1320 322 L1320 360 L1672 470 Z" fill="${P.shoulder}" stroke="${P.shoulderLine}" stroke-width="4"/></g>
+    <path class="pad-outline" d="M960 340 C1150 340 1330 342 1470 360 C1600 378 1672 430 1702 560 C1740 720 1790 960 1838 1220 C1870 1370 1872 1475 1835 1545 C1795 1615 1695 1635 1630 1600 C1575 1570 1520 1470 1480 1375 C1450 1310 1405 1250 1340 1236 C1260 1222 1100 1222 960 1222 C820 1222 660 1222 580 1236 C515 1250 470 1310 440 1375 C400 1470 345 1570 290 1600 C225 1635 125 1615 85 1545 C48 1475 52 1370 82 1220 C130 960 180 720 218 560 C248 430 320 378 450 360 C590 342 770 340 960 340 Z"
+      fill="${P.body}" stroke="${P.line}" stroke-width="7"/>
+    <path d="M240 560 C260 470 320 420 450 408 L1470 408 C1600 420 1660 470 1680 560 C1700 700 1720 880 1700 1010 C1680 1120 1600 1176 1460 1184 L460 1184 C320 1176 240 1120 220 1010 C200 880 220 700 240 560 Z" fill="none" stroke="${P.seam}" stroke-width="5"/>
+    ${stick('stick', 470, 700)}
     <!-- D-pad -->
-    <g transform="translate(397 327)">
-      <path d="M-24 -72 h48 a5 5 0 0 1 5 5 v43 h43 a5 5 0 0 1 5 5 v38 a5 5 0 0 1 -5 5 h-43 v43 a5 5 0 0 1 -5 5 h-48 a5 5 0 0 1 -5 -5 v-43 h-43 a5 5 0 0 1 -5 -5 v-38 a5 5 0 0 1 5 -5 h43 v-43 a5 5 0 0 1 5 -5 Z" fill="${P.face}" stroke="${P.faceLine}" stroke-width="3"/>
-      <g class="pk pk-dp" data-k="sharp"><path d="M-24 -72 h48 a5 5 0 0 1 5 5 v43 h-58 v-43 a5 5 0 0 1 5 -5 Z" fill="${P.face}"/><path d="M0 -58 l9 13 h-18 Z" fill="${P.mark}"/></g>
-      <g class="pk pk-dp" data-k="flat"><path d="M-29 24 h58 v43 a5 5 0 0 1 -5 5 h-48 a5 5 0 0 1 -5 -5 Z" fill="${P.face}"/><path d="M0 58 l9 -13 h-18 Z" fill="${P.mark}"/></g>
-      <path d="M-58 0 l13 -9 v18 Z M58 0 l-13 -9 v18 Z" fill="${P.mark}"/>
+    <g transform="translate(697 960)">
+      <path d="M-52 -146 h104 a10 10 0 0 1 10 10 v84 h84 a10 10 0 0 1 10 10 v84 a10 10 0 0 1 -10 10 h-84 v84 a10 10 0 0 1 -10 10 h-104 a10 10 0 0 1 -10 -10 v-84 h-84 a10 10 0 0 1 -10 -10 v-84 a10 10 0 0 1 10 -10 h84 v-84 a10 10 0 0 1 10 -10 Z" fill="${P.face}" stroke="${P.faceLine}" stroke-width="7"/>
+      <g class="pk pk-dp" data-k="sharp"><path d="M-52 -146 h104 a10 10 0 0 1 10 10 v84 h-124 v-84 a10 10 0 0 1 10 -10 Z" fill="${P.face}"/><path d="M0 -102 l14 20 h-28 Z" fill="${P.mark}"/></g>
+      <g class="pk pk-dp" data-k="flat"><path d="M-62 52 h124 v84 a10 10 0 0 1 -10 10 h-104 a10 10 0 0 1 -10 -10 Z" fill="${P.face}"/><path d="M0 102 l14 -20 h-28 Z" fill="${P.mark}"/></g>
+      <path d="M-102 0 l20 -14 v28 Z M102 0 l-20 -14 v28 Z" fill="${P.mark}"/>
     </g>
-    ${stick('', 645, 318)}
+    ${stick('', 1185, 945)}
     <!-- small buttons -->
-    <circle cx="418" cy="160" r="19" fill="${P.face}"/><rect x="408" y="158" width="20" height="4" rx="2" fill="${P.mark}"/>
-    <circle cx="619" cy="158" r="19" fill="${P.face}"/><path d="M617 149 h4 v7 h7 v4 h-7 v7 h-4 v-7 h-7 v-4 h7 Z" fill="${P.mark}"/>
-    <rect x="451" y="201" width="34" height="34" rx="7" fill="${P.face}"/><circle cx="468" cy="218" r="8" fill="none" stroke="${P.mark}" stroke-width="2"/>
-    <circle cx="573" cy="216" r="20" fill="${P.face}"/><path d="M573 207 l9 8 v9 h-18 v-9 Z" fill="none" stroke="${P.mark}" stroke-width="2"/>
-    <rect x="511" y="380" width="34" height="34" rx="7" fill="${P.face}"/><text x="528" y="398" class="pad-letter" fill="${P.mark}" font-size="16">C</text>
+    <circle cx="742" cy="560" r="46" fill="${P.face}" stroke="${P.faceLine}" stroke-width="5"/><rect x="718" y="555" width="48" height="10" rx="5" fill="${P.mark}"/>
+    <circle cx="1180" cy="560" r="46" fill="${P.face}" stroke="${P.faceLine}" stroke-width="5"/><path d="M1175 536 h10 v19 h19 v10 h-19 v19 h-10 v-19 h-19 v-10 h19 Z" fill="${P.mark}"/>
+    <rect x="811" y="665" width="76" height="76" rx="12" fill="${P.face}" stroke="${P.faceLine}" stroke-width="5"/><circle cx="849" cy="703" r="20" fill="none" stroke="${P.mark}" stroke-width="5"/>
+    <circle cx="1072" cy="703" r="45" fill="${P.face}" stroke="${P.faceLine}" stroke-width="5"/><path d="M1072 684 l20 18 v20 h-40 v-20 Z" fill="${P.mark}"/>
+    <rect x="922" y="1062" width="76" height="76" rx="12" fill="${P.face}" stroke="${P.faceLine}" stroke-width="5"/><text x="960" y="1102" class="pad-letter" fill="${P.mark}" font-size="44">C</text>
     <!-- face buttons -->
-    ${face('cu', 735, 157, labels.cu)}${face('cl', 676, 211, labels.cl)}${face('cr', 815, 211, labels.cr)}${face('', 755, 266, labels.south)}
-    <g class="pk pk-tag" data-k="a"><rect x="250" y="30" width="110" height="46" rx="12" fill="${P.shoulder}"/><text x="305" y="54" class="pad-tag">${labels.a}</text></g>
-    <g class="pk pk-tag" data-k="cd"><rect x="600" y="30" width="110" height="46" rx="12" fill="${P.shoulder}"/><text x="655" y="54" class="pad-tag">${labels.cd}</text></g>
+    ${face('cu', 1432, 578, labels.cu)}${face('cl', 1284, 705, labels.cl)}${face('cr', 1580, 705, labels.cr)}${face('', 1432, 832, labels.south)}
+    <g class="pk pk-tag" data-k="a"><rect x="300" y="186" width="220" height="96" rx="24" fill="#3c3d42"/><text x="410" y="236" class="pad-tag" font-size="56">${labels.a}</text></g>
+    <g class="pk pk-tag" data-k="cd"><rect x="1400" y="186" width="220" height="96" rx="24" fill="#3c3d42"/><text x="1510" y="236" class="pad-tag" font-size="56">${labels.cd}</text></g>
   </svg>`;
 }
 

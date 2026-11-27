@@ -237,7 +237,7 @@ function buildViews() {
   vis.ocParts = $$('[data-k]', el.oc); vis.ocLabels = $$('[data-l]', el.oc);
   vis.padParts = $$('[data-k]', el.pad);
   vis.stick = $('.stick', el.pad);
-  vis.stickR = S.scheme === 'n64' ? 34 : 22;
+  vis.stickR = S.scheme === 'n64' ? 34 : 44;
 }
 
 let wobbleT = 0;
