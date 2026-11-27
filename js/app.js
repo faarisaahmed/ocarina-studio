@@ -1132,7 +1132,7 @@ function updatePadStatus() {
   if (sig === padSig) return;
   padSig = sig;
   const b = $('#padStatus');
-  if (!pads.length) { b.className = 'pad-status'; b.innerHTML = '<i class="dot"></i><span>No controller</span>'; }
+  if (!pads.length) { b.className = 'pad-status'; b.innerHTML = '<i class="dot"></i><span>No controller – press a button</span>'; b.title = 'Browsers only show a controller after you press a button on it while this page is open.'; }
   else {
     const p = pads[0];
     const warn = p.mapping !== 'standard' && !S.bindings[`${S.scheme}|${p.id}`];
