@@ -1,18 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <radialGradient id="fb" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#9fe0ff"/><stop offset=".5" stop-color="#2a6fc4"/><stop offset="1" stop-color="#0b2456"/></radialGradient>
-    <linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbe7a6"/><stop offset="1" stop-color="#b8913a"/></linearGradient>
-  </defs>
-  <symbol id="mark" viewBox="0 0 64 64">
-    <circle cx="32" cy="32" r="29" fill="#0a2216" stroke="url(#fg)" stroke-width="3"/>
-    <path d="M20 30 L8 28.5 Q5.5 28.4 5.5 31 L5.5 33 Q5.6 35.5 8 35.3 L20 35 Z" fill="#c9d3e3"/>
-    <path d="M17 32 C17 24 27 20.5 38 21 C50 21.5 58 26 58 32.5 C58 39 49 42.5 38 42.5 C26 42.5 17 39 17 32 Z" fill="url(#fb)"/>
-    <path d="M22 27 C27 23 34 22.5 40 23 C34 24 28 25.5 24 29 Z" fill="#fff" opacity=".35"/>
-    <circle cx="29" cy="28.5" r="2.2" fill="#08101f"/>
-    <circle cx="37" cy="27" r="2.4" fill="#08101f"/>
-    <circle cx="45" cy="28" r="2.2" fill="#08101f"/>
-    <circle cx="51" cy="31" r="1.9" fill="#08101f"/>
-    <path d="M47 11 l1.6 3.6 3.6 1.6 -3.6 1.6 -1.6 3.6 -1.6 -3.6 -3.6 -1.6 3.6 -1.6 z" fill="#fbe7a6"/>
-  </symbol>
-  <use href="#mark"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#4cc38a"/><text x="32" y="44" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="36" fill="#06140d">O</text></svg>

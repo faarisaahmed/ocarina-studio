@@ -4,7 +4,6 @@ import { OcarinaSynth } from './audio.js';
 import { Input, SCHEMES, KEY_HELP, detectStyle, looksN64 } from './input.js';
 import { Engine } from './engine.js';
 import * as G from './graphics.js';
-import * as P2 from './pads2d.js';
 import { GAME_SONGS, CLASSIC_SONGS, EXERCISES } from './songs.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -64,30 +63,23 @@ function download(name, obj) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-// ------------------------------------------------------------------ start
-const startEl = $('#start');
-function begin() {
-  ensureAudio();
-  if (!startEl.classList.contains('gone')) {
-    startEl.classList.add('gone');
-    setTimeout(() => startEl.remove(), 600);
-  }
+// ------------------------------------------------------------------ audio unlock
+const audioBanner = $('#audioBanner');
+function syncAudioBanner() {
+  const on = synth.ctx && synth.ctx.state === 'running';
+  audioBanner.hidden = !!on;
 }
-$('#startBtn').addEventListener('click', begin);
-startEl.addEventListener('pointerdown', begin);
-window.addEventListener('pointerdown', ensureAudio, { capture: true });
+function begin() { ensureAudio(); setTimeout(syncAudioBanner, 80); }
+window.addEventListener('pointerdown', begin, { capture: true });
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!$('#modal').hidden) { closeModal(); return; }
     const ex = $('.card.expanded'); if (ex) { toggleExpand(ex); return; }
   }
-  if (startEl.isConnected) begin(); else ensureAudio();
+  begin();
 }, { capture: true });
 input.onActivity = (kind) => {
-  if (kind === 'pad' && startEl.isConnected) {
-    begin();
-    if (!synth.ctx || synth.ctx.state !== 'running') toast('Controller found! Click anywhere once to switch the sound on.', 4000);
-  }
+  if (kind === 'pad' && !(synth.ctx && synth.ctx.state === 'running')) toast('Controller detected. Click anywhere once to turn on sound.', 4000);
 };
 
 // ------------------------------------------------------------------ router
@@ -133,16 +125,14 @@ const el = {
   bendVal: $('#bendVal'), bendFill: $('#bendFill'), bendDot: $('#bendDot'),
   centVal: $('#centVal'), centNeedle: $('#centNeedle'), vibVal: $('#vibVal'), vibFill: $('#vibFill'),
   live: $('#liveCombo'), staff: $('#staffWrap'), banner: $('#songBanner'), practice: $('#practiceBar'),
-  stage: $('#visualStage'), oc: $('#ocarinaView'), pad: $('#padView'), touch: $('#touchpad'), rec: $('#recorder'),
+  inputPanel: $('#inputPanel'), touch: $('#touchpad'), rec: $('#recorder'),
 };
 
 function renderPlayStatic() {
   $$('#schemeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.scheme === S.scheme));
-  $$('#visualSeg button').forEach((b) => b.classList.toggle('on', b.dataset.visual === S.visual));
-  el.stage.className = `visual-stage mode-${S.visual}`;
   const sc = SCHEMES[S.scheme];
-  $('#playHint').innerHTML = `<b>${sc.name}:</b> ${esc(sc.blurb)} <span class="kbd">Keyboard</span> Space ↓ → ← ↑ for notes, <span class="kbd">R</span>/<span class="kbd">Z</span> for half steps, <span class="kbd">W</span>/<span class="kbd">S</span> to bend, <span class="kbd">A</span>/<span class="kbd">D</span> for vibrato.`;
-  buildViews();
+  $('#playHint').textContent = sc.blurb;
+  buildInputPanel();
   renderTouch();
   renderStaff(false);
   renderPractice();
@@ -152,13 +142,6 @@ function renderPlayStatic() {
 }
 
 $('#schemeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setScheme(b.dataset.scheme); });
-$('#visualSeg').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  S.visual = b.dataset.visual; save();
-  $$('#visualSeg button').forEach((x) => x.classList.toggle('on', x === b));
-  el.stage.className = `visual-stage mode-${S.visual}`;
-});
-
 function toggleExpand(card) {
   const on = !card.classList.contains('expanded');
   $$('.card.expanded').forEach((c) => c.classList.remove('expanded'));
@@ -219,73 +202,81 @@ function updateNote(f) {
       el.live.innerHTML = '<span class="combo-t">Waiting for a note…</span>';
     } else {
       let h = combo({ id: f.active, half: f.half, bend: bk });
-      if (f.vib > 0.05) h += `<i class="plus" style="font-size:22px">+</i><span class="combo">${G.vibIcon()}</span>`;
+      if (f.vib > 0.05) h += `<span class="combo"><i class="plus">+</i>${G.vibIcon()}</span>`;
       el.live.innerHTML = h;
     }
   }
 }
 
-// ---- Instrument visuals (flat 2D drawings)
+// ---- Controller input panel
 const vis = {};
-function buildViews() {
-  const icons = Object.fromEntries(M.NOTE_IDS.map((id) => [id, icon(id)]));
-  icons.sharp = G.modIcon('sharp', S.scheme); icons.flat = G.modIcon('flat', S.scheme);
-  el.oc.innerHTML = P2.ocarinaSVG(icons);
-  const F = G.FACE[STY];
-  el.pad.innerHTML = S.scheme === 'n64' ? P2.n64SVG() : P2.proSVG({ ...F, south: { nintendo: 'B', xbox: 'A', ps: '✕' }[STY] });
-  vis.ocSvg = $('svg', el.oc); vis.rig = $('.oc-rig', el.oc);
-  vis.ocParts = $$('[data-k]', el.oc); vis.ocLabels = $$('[data-l]', el.oc);
-  vis.padParts = $$('[data-k]', el.pad);
-  vis.stick = $('.stick', el.pad);
-  vis.stickR = S.scheme === 'n64' ? 34 : 44;
+const ROWS = ['a', 'cd', 'cr', 'cl', 'cu', 'sharp', 'flat'];
+function deviceName() {
+  const p = input.pads()[0];
+  return p ? padName(p.id) : 'Keyboard and on-screen controls';
+}
+function buildInputPanel() {
+  const n64 = S.scheme === 'n64';
+  const row = (k) => {
+    const mod = k === 'sharp' || k === 'flat';
+    const key = mod ? G.modIcon(k, S.scheme) : icon(k);
+    const name = mod ? (k === 'sharp' ? 'Half step up' : 'Half step down') : `Note ${M.noteParts(M.BASE_MIDI[k]).label}`;
+    const kb = KEY_HELP[k];
+    return `<tr data-k="${k}"><td>${key}</td><td>${name}</td><td class="ip-kb"><span class="kbd">${esc(kb)}</span></td><td class="ip-st">–</td></tr>`;
+  };
+  el.inputPanel.innerHTML = `
+    <div class="ip-meta"><div><span>Layout</span><b>${esc(SCHEMES[S.scheme].name)}</b></div><div><span>Device</span><b id="ipDevice">${esc(deviceName())}</b></div></div>
+    <table class="ip-table">
+      <thead><tr><th>Button</th><th>Function</th><th>Keyboard</th><th>State</th></tr></thead>
+      <tbody>${ROWS.map(row).join('')}</tbody>
+    </table>
+    <div class="ip-axes">
+      <div class="ip-plot" aria-hidden="true"><i class="ip-h"></i><i class="ip-v"></i><i class="ip-dot" id="ipDot"></i></div>
+      <dl class="ip-vals">
+        <div><dt>${n64 ? 'Control Stick' : 'Left stick'} Y · bend</dt><dd id="ipY">0.00</dd></div>
+        <div><dt>${n64 ? 'Control Stick' : 'Left stick'} X · vibrato</dt><dd id="ipX">0.00</dd></div>
+        <div><dt>Keyboard</dt><dd class="ip-small">W / S bend · A / D vibrato</dd></div>
+      </dl>
+    </div>`;
+  vis.rows = Object.fromEntries($$('tr[data-k]', el.inputPanel).map((r) => [r.dataset.k, { tr: r, st: $('.ip-st', r), last: '' }]));
+  vis.dot = $('#ipDot'); vis.y = $('#ipY'); vis.x = $('#ipX');
 }
 
-let wobbleT = 0;
 function updateVisuals(f) {
   const s = f.s;
-  const isOn = (k) => (k === 'sharp' ? s.sharp : k === 'flat' ? s.flat : null);
-  if (vis.ocParts) {
-    for (const h of vis.ocParts) { const k = h.dataset.k; const m = isOn(k); h.classList.toggle('on', m === null ? k === f.active : !!m); }
-    for (const l of vis.ocLabels) { const k = l.dataset.l; const m = isOn(k); l.classList.toggle('on', m === null ? k === f.active : !!m); }
-    wobbleT += f.dt;
-    const wob = f.active ? Math.sin(wobbleT * Math.PI * 2 * S.vibratoRate) * f.vib * 1.6 : 0;
-    const tilt = f.active ? -f.bend * 2 : 0;
-    vis.rig.setAttribute('transform', `rotate(${(tilt + wob).toFixed(2)} 560 250)`);
-    vis.ocSvg.classList.toggle('sounding', !!f.active);
-  }
-  if (vis.padParts) {
-    for (const b of vis.padParts) { const k = b.dataset.k; const m = isOn(k); b.classList.toggle('on', m === null ? !!s.notes[k] : !!m); }
-    if (vis.stick) {
-      vis.stick.setAttribute('transform', `translate(${(s.vibX * vis.stickR).toFixed(1)} ${(-s.bendY * vis.stickR).toFixed(1)})`);
-      vis.stick.classList.toggle('on', Math.abs(s.bendY) > 0.05 || Math.abs(s.vibX) > 0.05);
+  if (!vis.rows) return;
+  for (const k of ROWS) {
+    const r = vis.rows[k];
+    const pressed = k === 'sharp' ? s.sharp : k === 'flat' ? s.flat : !!s.notes[k];
+    const sounding = k === f.active;
+    const state = sounding ? 'Sounding' : pressed ? 'Pressed' : '–';
+    if (state !== r.last) {
+      r.last = state;
+      r.st.textContent = state;
+      r.tr.classList.toggle('on', pressed || sounding);
+      r.tr.classList.toggle('sounding', sounding);
     }
   }
-}
-
-let floatCount = 0;
-function spawnFloaty() {
-  if (floatCount > 10 || !el.oc.offsetWidth || page !== 'play') return;
-  const n = document.createElement('span');
-  n.className = 'floaty';
-  n.textContent = ['♪', '♫', '♩', '♬'][Math.floor(Math.random() * 4)];
-  n.style.left = `${el.oc.offsetLeft + el.oc.offsetWidth * 0.12}px`;
-  n.style.top = `${el.oc.offsetTop + el.oc.offsetHeight * 0.8}px`;
-  n.style.setProperty('--dx', `${-40 - Math.random() * 60}px`);
-  n.style.setProperty('--rot', `${(Math.random() - 0.5) * 50}deg`);
-  el.stage.appendChild(n);
-  floatCount++;
-  setTimeout(() => { n.remove(); floatCount--; }, 1700);
+  vis.dot.style.left = `${50 + s.vibX * 46}%`;
+  vis.dot.style.top = `${50 - s.bendY * 46}%`;
+  vis.y.textContent = `${s.bendY >= 0 ? '+' : '−'}${Math.abs(s.bendY).toFixed(2)}`;
+  vis.x.textContent = `${s.vibX >= 0 ? '+' : '−'}${Math.abs(s.vibX).toFixed(2)}`;
 }
 
 // ---- Staff & song recognition
 const staff = { items: [], locked: false, replaying: false };
-function renderStaff(pop) { el.staff.innerHTML = G.staffSVG(staff.items, S.scheme, STY, { popLast: pop }); }
-$('#clearStaff').addEventListener('click', () => { staff.items = []; staff.locked = false; renderStaff(false); });
+const roundBend = (b) => (Math.abs(b) < 0.5 ? 0 : Math.abs(b) > 1.5 ? 2 * Math.sign(b) : Math.sign(b));
+function renderStaff(pop) {
+  el.staff.innerHTML = staff.items.length
+    ? staff.items.map((it, i) => `<span class="rn ${it.cls || ''} ${pop && i === staff.items.length - 1 ? 'new' : ''}"><b>${label(Math.round(it.midi))}</b>${combo({ id: it.id, half: it.half, bend: roundBend(it.bend) })}</span>`).join('')
+    : '<p class="muted">Notes you play appear here. The ocarina songs are recognized automatically.</p>';
+}
+$('#clearStaff').addEventListener('click', () => { staff.items = []; staff.locked = false; renderStaff(false); el.banner.classList.remove('show'); });
 
 function pushStaff(e) {
   if (staff.locked && !e.auto) return;
   if (staff.locked && e.auto && !staff.replaying) return;
-  staff.items.push({ id: e.id, half: e.half, bend: e.bend });
+  staff.items.push({ id: e.id, half: e.half, bend: e.bend, midi: e.midi });
   if (staff.items.length > G.STAFF_SLOTS) staff.items.shift();
   renderStaff(true);
   if (!e.auto && !practice) checkSongs();
@@ -420,11 +411,11 @@ function endPractice() { practice = null; renderPractice(); el.banner.classList.
 function renderPractice() {
   const p = practice;
   const box = el.practice;
-  if (!p) { box.hidden = true; box.innerHTML = ''; $('#staffTitle').textContent = 'Staff'; return; }
+  if (!p) { box.hidden = true; box.innerHTML = ''; $('#staffTitle').textContent = 'Played notes'; return; }
   box.hidden = false;
   $('#staffTitle').textContent = p.kind === 'teach' ? 'Teach a song' : 'Lesson';
   if (p.kind === 'teach') {
-    box.innerHTML = `<div class="pb-top"><div class="pb-title">Scarecrow's Song<small>Play any 8 notes. They become your own song, and the game-style staff will recognize it from then on.</small></div>
+    box.innerHTML = `<div class="pb-top"><div class="pb-title">Scarecrow's Song<small>Play any 8 notes. They become your own song, and it will be recognized like the other songs.</small></div>
       <div class="pb-actions"><button class="btn btn-sm" data-p="exit">Cancel</button></div></div>
       <div class="pb-seq">${Array.from({ length: 8 }, (_, i) => `<div class="pb-step ${i < p.ids.length ? 'done' : i === p.ids.length ? 'cur' : ''}">${p.ids[i] ? combo({ id: p.ids[i], half: 0, bend: 0 }) : '<span class="combo" style="opacity:.3">?</span>'}<span class="pn">${i + 1}</span></div>`).join('')}</div>
       <div class="pb-progress"><i style="width:${(p.ids.length / 8) * 100}%"></i></div>`;
@@ -477,7 +468,6 @@ function practiceMiss() {
 
 engine.on('noteStart', (e) => {
   pushStaff(e);
-  spawnFloaty();
   if (e.auto) return;
   if (rec.on) recStart();
   const p = practice;
@@ -488,7 +478,7 @@ engine.on('noteStart', (e) => {
       S.scarecrow = p.ids.slice(0, 8); save();
       synth.chime();
       practice = null;
-      banner("Scarecrow's Song saved!", 'Play those 8 notes any time and the staff will recognize them.', 4000);
+      banner("Scarecrow's Song saved!", 'Play those 8 notes any time and they will be recognized.', 4000);
       invalidate('songs');
     }
     renderPractice();
@@ -674,9 +664,9 @@ function renderSongs() {
   const melodies = allSongs().filter((s) => s.kind === 'game' && s.group !== 'Warp');
   const warps = allSongs().filter((s) => s.kind === 'game' && s.group === 'Warp');
   const mine = customSongs();
-  const scare = S.scarecrow ? '' : `<article class="card song-card" data-teach="1"><div class="sc-top"><div><h3>Scarecrow's Song</h3><div class="sc-by">Make up your own</div></div><span class="tag">Custom</span></div><div class="sc-seq">${'<span class="combo" style="opacity:.35">?</span>'.repeat(8)}</div><p class="sc-desc">Play any 8 notes to teach it. After that the staff recognizes it like the others.</p><div class="sc-actions"><button class="btn btn-sm btn-gold" data-teach="1">Teach it</button></div></article>`;
+  const scare = S.scarecrow ? '' : `<article class="card song-card" data-teach="1"><div class="sc-top"><div><h3>Scarecrow's Song</h3><div class="sc-by">Make up your own</div></div><span class="tag">Custom</span></div><div class="sc-seq">${'<span class="combo" style="opacity:.35">?</span>'.repeat(8)}</div><p class="sc-desc">Play any 8 notes to teach it. After that it's recognized like the others.</p><div class="sc-actions"><button class="btn btn-sm btn-gold" data-teach="1">Teach it</button></div></article>`;
   pg.innerHTML = `
-    <div class="page-head"><div><h1>Songs</h1><p>Press <b>Listen</b> to hear a song and watch the fingering, or <b>Practice</b> to play along note by note. In free play the staff recognizes the ocarina melodies whenever you play them. The classics are public-domain tunes, transposed automatically so they're as easy as possible to play.</p></div>
+    <div class="page-head"><div><h1>Songs</h1><p>Press <b>Listen</b> to hear a song and see each button combination, or <b>Practice</b> to play along note by note. In free play, the ocarina melodies are recognized whenever you play them. The classics are public-domain tunes, transposed automatically so they're as easy as possible to play.</p></div>
       <div class="songs-tools"><button class="btn btn-gold" data-new="1">+ New song</button><button class="btn" data-import="1">Import</button><button class="btn" data-exportall="1" ${mine.length ? '' : 'disabled'}>Export mine</button><input type="file" id="importFile" accept=".json,application/json" hidden></div></div>
     <div class="section-t">Ocarina melodies</div>
     <div class="song-grid">${melodies.map(songCard).join('')}${scare}</div>
@@ -855,7 +845,7 @@ function renderNotes() {
       <div class="ncombos">${chips || '<span class="sc-desc">Needs a half tilt. Turn on half-tilt fingerings above.</span>'}</div></div>`);
   }
   pg.innerHTML = `
-    <div class="page-head"><div><h1>Note Chart</h1><p>The ocarina reaches 19 pitches, from B3 to F5. Five come straight from the buttons. The rest use the half-step modifier, the stick, or both, and most can be fingered more than one way. The easiest fingering is listed first. Click any fingering to hear it and see it on the instrument. The page lights up whatever you're playing.</p></div>
+    <div class="page-head"><div><h1>Note Chart</h1><p>The ocarina reaches 19 pitches, from B3 to F5. Five come straight from the buttons. The rest use the half-step modifier, the stick, or both, and most can be fingered more than one way. The easiest fingering is listed first. Click any fingering to hear it. The row for whatever you're playing is highlighted.</p></div>
       <label class="switch"><input type="checkbox" id="partialToggle" ${S.partial ? 'checked' : ''}> Show half-tilt fingerings</label></div>
     <div class="card keystrip">${keys.join('')}</div>
     <div class="card legend">
@@ -1008,7 +998,7 @@ $('#page-controls').addEventListener('change', (e) => {
   const k = e.target.dataset.set; if (!k) return;
   save();
   if (k === 'labelStyle') refreshStyle(true);
-  else if (['skin', 'showKeys', 'noteNames', 'octave'].includes(k)) { fresh.play = false; fresh.notes = false; fresh.songs = false; if (k !== 'skin') lastNoteKey = ''; }
+  else if (['showKeys', 'noteNames', 'octave'].includes(k)) { fresh.play = false; fresh.notes = false; fresh.songs = false; lastNoteKey = ''; }
   if (k === 'octave' && synth.sounding) synth.noteOff();
 });
 
@@ -1050,7 +1040,7 @@ function renderWizard() {
   const w = wizard;
   const s = w.steps[w.i];
   openModal(`<h2>Map your controller</h2><p class="m-sub">${esc(w.id)}</p>
-    <div class="wiz-step"><div class="wiz-icon"><span class="combo" style="font-size:110px">${s.art}</span></div><div class="wiz-prompt">${esc(s.prompt)}</div>
+    <div class="wiz-step"><div class="wiz-icon"><span class="combo">${s.art}</span></div><div class="wiz-prompt">${esc(s.prompt)}</div>
     <p class="m-sub">${w.wait ? 'Let go of everything first…' : 'Waiting for input…'}</p>
     <div class="m-controls" style="justify-content:center"><button class="btn btn-sm" data-wz="skip">Skip (keep default)</button><button class="btn btn-sm btn-ghost" data-wz="cancel">Cancel</button></div>
     <div class="wiz-list">${w.steps.map((x, i) => `<span class="${i < w.i ? 'done' : i === w.i ? 'cur' : ''}">${esc(x.prompt.replace(/^Press |^Push the /, ''))}</span>`).join('')}</div></div>`, () => { wizard = null; input.enabled = true; });
@@ -1123,7 +1113,7 @@ function renderTips() {
     <article class="card tip"><h3><span class="n">5</span>Modifiers re-articulate</h3>
       <p>As in the N64 game, pressing or releasing ${R}/${Z} while a note is held starts a <i>new</i> note. You can use this for quick trills: hold ${icon('cr')} and tap ${R} to alternate A and A♯ without re-pressing the note.</p></article>
     <article class="card tip"><h3><span class="n">6</span>Vibrato like a singer</h3>
-      <p>Tilt the stick sideways ${G.vibIcon({ cls: '' }).replace('class="si', 'style="width:24px;height:24px;vertical-align:middle" class="si')} only on <b>long</b> notes, and let it bloom in after the note has started. Shallow vibrato on held notes sounds expressive. Constant deep vibrato sounds seasick. Depth and speed are adjustable in Controls.</p></article>
+      <p>Tilt the stick sideways (${G.vibIcon()}) only on <b>long</b> notes, and let it bloom in after the note has started. Shallow vibrato on held notes sounds expressive. Constant deep vibrato sounds seasick. Depth and speed are adjustable in Controls.</p></article>
     <article class="card tip"><h3><span class="n">7</span>Repeated notes need a re-press</h3>
       <p>Two of the same note in a row (A, A in the Serenade) means letting go and pressing again. Leave a tiny gap so each note is distinct, and keep it short so the melody doesn't sound choppy.</p></article>
     <article class="card tip"><h3><span class="n">8</span>Slides and bends for expression</h3>
@@ -1164,6 +1154,7 @@ function updatePadStatus() {
     if (warn) toast('That controller uses a non-standard layout. Open Controls and press "Map buttons".', 5000);
   }
   refreshStyle(false);
+  const dev = $('#ipDevice'); if (dev) dev.textContent = deviceName();
   if (page === 'controls') refreshPadList();
 }
 $('#padStatus').addEventListener('click', () => { location.hash = '#/controls'; });
@@ -1184,38 +1175,12 @@ function updateMini(force, f) {
   mini.classList.toggle('idle', !sounding);
   if (sounding) {
     const b = Math.abs(fr.bend) < 0.25 ? 0 : Math.abs(fr.bend) > 1.5 ? 2 * Math.sign(fr.bend) : Math.sign(fr.bend);
-    mini.innerHTML = `${combo({ id: fr.active, half: fr.half, bend: b })}<b>${M.noteParts(fr.midi, namePref()).label}</b>`;
+    mini.innerHTML = `<b>${M.noteParts(fr.midi, namePref()).label}</b>${combo({ id: fr.active, half: fr.half, bend: b })}`;
+  } else if (!mini.innerHTML) {
+    mini.innerHTML = `<b>${M.noteParts(engine.lastMidi, namePref()).label}</b>`;
   }
 }
 mini.addEventListener('click', () => { location.hash = '#/play'; });
-
-// ------------------------------------------------------------------ background motes
-function motes() {
-  const cv = $('#motes'), ctx = cv.getContext('2d');
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let W, H, dpr;
-  const ps = Array.from({ length: 46 }, () => ({ x: Math.random(), y: Math.random(), r: 0.6 + Math.random() * 1.8, s: 0.004 + Math.random() * 0.012, p: Math.random() * 6.28, h: Math.random() < 0.7 ? '244,226,168' : '134,227,185' }));
-  const size = () => { dpr = Math.min(2, devicePixelRatio || 1); W = cv.width = innerWidth * dpr; H = cv.height = innerHeight * dpr; };
-  size(); addEventListener('resize', size);
-  let boost = 0;
-  engine.on('noteStart', () => { boost = 1; });
-  let last = performance.now();
-  const draw = (t) => {
-    const dt = Math.min(0.05, (t - last) / 1000); last = t;
-    boost = Math.max(0, boost - dt * 1.2);
-    ctx.clearRect(0, 0, W, H);
-    for (const m of ps) {
-      if (!reduce) { m.y -= m.s * dt * (1 + boost * 3); m.x += Math.sin(t / 1800 + m.p) * 0.00012; if (m.y < -0.02) { m.y = 1.02; m.x = Math.random(); } }
-      const a = 0.25 + 0.35 * Math.sin(t / 700 + m.p) ** 2 + boost * 0.3;
-      const g = ctx.createRadialGradient(m.x * W, m.y * H, 0, m.x * W, m.y * H, m.r * 5 * dpr);
-      g.addColorStop(0, `rgba(${m.h},${a})`); g.addColorStop(1, `rgba(${m.h},0)`);
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(m.x * W, m.y * H, m.r * 5 * dpr, 0, 6.283); ctx.fill();
-    }
-    if (!reduce || boost > 0) requestAnimationFrame(draw);
-    else setTimeout(() => requestAnimationFrame(draw), 500);
-  };
-  requestAnimationFrame(draw);
-}
 
 // ------------------------------------------------------------------ main loop
 engine.on('frame', (f) => {
@@ -1240,7 +1205,7 @@ function loop(t) {
 
 updatePadStatus();
 route();
-motes();
+syncAudioBanner();
 requestAnimationFrame(loop);
 
 // Debug/automation hook
