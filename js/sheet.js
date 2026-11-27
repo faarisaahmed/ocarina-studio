@@ -96,6 +96,7 @@ export async function renderSheet(el, events, opts) {
   const meter = opts.meter || '4/4';
   const [num, den] = meter.split('/').map(Number);
   el.innerHTML = '';
+  el.classList.remove('sheet-short');
   const width = Math.max(300, el.clientWidth - 16);
   const measures = buildMeasures(events, meter);
   const key = chooseKey(events.filter((e) => e.midi != null && !e.out).map((e) => e.midi));
@@ -131,6 +132,7 @@ export async function renderSheet(el, events, opts) {
     const scale = last && total * NOTE_W < width * 0.7 ? NOTE_W * 1.15 : (width - 4) / total;
     let x = 2;
     for (const c of ln) { placement[c.mi] = { x, w: c.w * scale, line: li, first: c === ln[0], lead: c.lead * NOTE_W }; x += c.w * scale; }
+    if (layout.length === 1) { renderer.resize(Math.ceil(x + 4), lineH + 16); el.classList.add('sheet-short'); }
   });
 
   measures.forEach((m, mi) => {

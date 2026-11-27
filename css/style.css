@@ -446,6 +446,7 @@ details.more[open] summary { margin-bottom: 10px; }
 .m-viewbar { display: flex; justify-content: flex-start; margin: 4px 0 10px; }
 .sheet { background: #fbfbf7; color: #111; border-radius: 6px; padding: 8px; overflow-x: auto; min-height: 120px; }
 .sheet svg { display: block; }
+.sheet.sheet-short { display: inline-block; max-width: 100%; }
 .sheet .muted { color: #555; padding: 12px; }
 .sheet .sheet-cur, .sheet .sheet-cur * { fill: #12804f !important; stroke: #12804f !important; }
 .sheet-legend { color: var(--muted); font-size: 12px; margin-top: 8px; }
