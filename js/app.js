@@ -4,6 +4,7 @@ import { OcarinaSynth } from './audio.js';
 import { Input, SCHEMES, KEY_HELP, detectStyle, looksN64 } from './input.js';
 import { Engine } from './engine.js';
 import * as G from './graphics.js';
+import { renderSheet } from './sheet.js';
 import { GAME_SONGS, CLASSIC_SONGS, EXERCISES } from './songs.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -364,11 +365,28 @@ function songEvents(song) {
   if (song.seq) return song.seq.map((id, i) => ({ combo: { id, half: 0, bend: 0 }, midi: M.BASE_MIDI[id], beats: (song.beats && song.beats[i]) || 1 }));
   const t = transposeFor(song);
   return parsedNotes(song).map((n) => {
-    if (n.midi == null) return { combo: null, midi: null, beats: n.beats, rest: true };
+    if (n.midi == null) return { combo: null, midi: null, beats: n.beats, rest: true, barAfter: n.barAfter };
     const m = n.midi + t;
     const inRange = m >= M.LOWEST && m <= M.HIGHEST;
-    return { combo: inRange ? M.bestCombo(m) : null, midi: m, beats: n.beats, out: !inRange };
+    return { combo: inRange ? M.bestCombo(m) : null, midi: m, beats: n.beats, out: !inRange, barAfter: n.barAfter };
   });
+}
+
+// Sheet music helpers
+function vexKey(midi) {
+  const p = M.noteParts(midi, namePref());
+  return `${p.letter.toLowerCase()}${p.acc === '♯' ? '#' : p.acc === '♭' ? 'b' : ''}/${p.octave}`;
+}
+function tabText(ev) {
+  const c = ev.combo; if (!c) return '';
+  let t = G.keyLabel(c.id, S.scheme, STY);
+  if (c.half) t += S.scheme === 'n64' ? (c.half > 0 ? ' R' : ' Z') : (c.half > 0 ? ' D↑' : ' D↓');
+  if (c.bend) t += ` ${Math.abs(c.bend) === 2 ? '' : '½'}${c.bend > 0 ? '⤒' : '⤓'}`;
+  return t;
+}
+function sheetLegend() {
+  const mods = S.scheme === 'n64' ? 'R = half step up, Z = half step down' : 'D↑ = D-pad up (half step up), D↓ = D-pad down';
+  return `Under each note: the button to press. ${mods}. ⤒ / ⤓ = tilt the stick fully up / down (½ = halfway).`;
 }
 
 let listening = null;
@@ -676,7 +694,7 @@ $('#page-songs').addEventListener('click', (e) => {
   else if (d.new) openEditor(null);
   else if (d.teach) startTeach();
   else if (d.import) $('#importFile').click();
-  else if (d.exportall) download('ocarina-songs.json', { format: 'ocarina-studio-songs', version: 1, songs: S.customSongs.map(({ title, bpm, text }) => ({ title, bpm, text })) });
+  else if (d.exportall) download('ocarina-songs.json', { format: 'ocarina-studio-songs', version: 1, songs: S.customSongs.map(({ title, bpm, meter, text }) => ({ title, bpm, meter, text })) });
   else if (d.open) openSong(getSong(d.open));
 });
 $('#page-songs').addEventListener('keydown', (e) => {
@@ -692,7 +710,7 @@ $('#page-songs').addEventListener('change', async (e) => {
     for (const s of list) {
       if (!s || typeof s.text !== 'string') continue;
       M.parseSong(s.text);
-      S.customSongs.push({ id: `my-${Date.now().toString(36)}${n}`, title: String(s.title || 'Imported song').slice(0, 80), bpm: Math.max(30, Math.min(260, +s.bpm || 100)), text: s.text });
+      S.customSongs.push({ id: `my-${Date.now().toString(36)}${n}`, title: String(s.title || 'Imported song').slice(0, 80), bpm: Math.max(30, Math.min(260, +s.bpm || 100)), meter: /^\d\/\d$/.test(s.meter) ? s.meter : '4/4', text: s.text });
       n++;
     }
     save(); invalidate('songs');
@@ -726,18 +744,40 @@ function openSong(song) {
         ${chromatic ? `<label>Transpose <button class="btn btn-sm" data-m="t-">−</button><span class="val">${t > 0 ? '+' : ''}${t}</span><button class="btn btn-sm" data-m="t+">+</button><button class="btn btn-sm ${isAuto ? 'btn-gold' : ''}" data-m="auto">Auto</button></label>` : ''}
         <label>Tempo <input type="range" min="40" max="220" value="${tempoFor(song)}" data-m="tempo" style="width:120px"><span class="val" id="mTempo">${tempoFor(song)}</span></label>
       </div>
-      <div class="m-notes" id="mNotes">${noteCells(song)}</div>`, () => { if (listening === song.id) engine.stopAuto(); });
+      <div class="m-viewbar"><div class="seg seg-sm" id="mView"><button data-v="sheet" class="${S.songView !== 'list' ? 'on' : ''}">Sheet music</button><button data-v="list" class="${S.songView === 'list' ? 'on' : ''}">Button list</button></div></div>
+      <div id="mSheetWrap" ${S.songView === 'list' ? 'hidden' : ''}><div class="sheet" id="mSheet"><p class="muted">Loading sheet music…</p></div><p class="sheet-legend">${sheetLegend()}</p></div>
+      <div class="m-notes" id="mNotes" ${S.songView === 'list' ? 'hidden' : ''}>${noteCells(song)}</div>`, () => { if (listening === song.id) engine.stopAuto(); });
+    if (S.songView === 'list') $('#mSheetWrap').hidden = true; else $('#mNotes').hidden = true;
+    let sheet = null;
+    const drawSheet = () => {
+      if (S.songView === 'list' || sheet) return;
+      sheet = {};
+      renderSheet($('#mSheet'), songEvents(song), { meter: song.meter || '4/4', keyOf: vexKey, tabOf: tabText })
+        .then((ctl) => { sheet = ctl; })
+        .catch((err) => { $('#mSheet').innerHTML = `<p class="muted">${esc(err.message)}</p>`; });
+    };
+    requestAnimationFrame(drawSheet);
     box.onclick = (e) => {
+      const v = e.target.closest('[data-v]');
+      if (v) {
+        S.songView = v.dataset.v; save();
+        $$('#mView button').forEach((x) => x.classList.toggle('on', x === v));
+        $('#mSheetWrap').hidden = S.songView === 'list';
+        $('#mNotes').hidden = S.songView !== 'list';
+        drawSheet();
+        return;
+      }
       const b = e.target.closest('[data-m]'); if (!b) return;
       const a = b.dataset.m;
       if (a === 'listen') listen(song, (ei) => {
         $$('.m-note.cur').forEach((x) => x.classList.remove('cur'));
-        const c = $(`.m-note[data-ei="${ei}"]`); if (c) { c.classList.add('cur'); c.scrollIntoView({ block: 'nearest' }); }
+        const c = $(`.m-note[data-ei="${ei}"]`); if (c && !c.closest('[hidden]')) { c.classList.add('cur'); c.scrollIntoView({ block: 'nearest' }); }
+        if (sheet && sheet.highlight && S.songView !== 'list') sheet.highlight(ei);
       });
       if (a === 'stop') engine.stopAuto();
       if (a === 'practice') startPractice(song);
       if (a === 'edit') { closeModal(); openEditor(song); }
-      if (a === 'export') download(`${song.title.replace(/[^\w-]+/g, '-').toLowerCase()}.json`, { format: 'ocarina-studio-songs', version: 1, songs: [{ title: song.title, bpm: song.bpm, text: song.text }] });
+      if (a === 'export') download(`${song.title.replace(/[^\w-]+/g, '-').toLowerCase()}.json`, { format: 'ocarina-studio-songs', version: 1, songs: [{ title: song.title, bpm: song.bpm, meter: song.meter, text: song.text }] });
       if (a === 't-' || a === 't+') {
         const notes = parsedNotes(song);
         let v = transposeFor(song);
@@ -765,6 +805,7 @@ function openEditor(song, prefill) {
     <div class="form-grid">
       <div class="form-row"><label for="edTitle">Title</label><input type="text" id="edTitle" maxlength="80" value="${esc(src.title)}" placeholder="My song"></div>
       <div class="form-row"><label for="edBpm">Tempo (BPM)</label><input type="number" id="edBpm" min="30" max="260" value="${src.bpm || 100}"></div>
+      <div class="form-row"><label for="edMeter">Time signature</label><select id="edMeter">${['4/4', '3/4', '2/4', '6/8', '3/8'].map((m) => `<option ${(src.meter || '4/4') === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
     </div>
     <div class="form-row"><label for="edText">Notes</label><textarea id="edText" spellcheck="false" placeholder="D4 F4 A4:2 | B4 A4 F4:2">${esc((src.text || '').trim())}</textarea></div>
     <div class="m-err" id="edErr"></div>
@@ -775,7 +816,7 @@ function openEditor(song, prefill) {
       ${isNew ? '' : '<button class="btn btn-danger" data-e="delete">Delete</button>'}
     </div>
     <div class="m-notes" id="edPrev"></div>`, () => engine.stopAuto());
-  const draft = () => ({ id: song ? song.id : '__draft', title: $('#edTitle').value.trim() || 'Untitled', bpm: Math.max(30, Math.min(260, +$('#edBpm').value || 100)), text: $('#edText').value, kind: 'custom' });
+  const draft = () => ({ id: song ? song.id : '__draft', title: $('#edTitle').value.trim() || 'Untitled', bpm: Math.max(30, Math.min(260, +$('#edBpm').value || 100)), meter: $('#edMeter').value, text: $('#edText').value, kind: 'custom' });
   const preview = () => {
     const d = draft();
     try { M.parseSong(d.text); $('#edErr').textContent = ''; $('#edPrev').innerHTML = d.text.trim() ? noteCells(d) : ''; return d; }
@@ -798,8 +839,8 @@ function openEditor(song, prefill) {
     if (a === 'save') {
       const d = preview(); if (!d) return;
       if (!d.text.trim()) { $('#edErr').textContent = 'Add at least one note.'; return; }
-      if (isNew) S.customSongs.push({ id: `my-${Date.now().toString(36)}`, title: d.title, bpm: d.bpm, text: d.text });
-      else Object.assign(S.customSongs.find((s) => s.id === song.id), { title: d.title, bpm: d.bpm, text: d.text });
+      if (isNew) S.customSongs.push({ id: `my-${Date.now().toString(36)}`, title: d.title, bpm: d.bpm, meter: d.meter, text: d.text });
+      else Object.assign(S.customSongs.find((s) => s.id === song.id), { title: d.title, bpm: d.bpm, meter: d.meter, text: d.text });
       save(); closeModal(); invalidate('songs'); toast(`Saved “${d.title}”`);
       if (page !== 'songs') location.hash = '#/songs';
     }
@@ -812,36 +853,54 @@ function openEditor(song, prefill) {
 }
 
 // ------------------------------------------------------------------ NOTE CHART page
+const PIANO_LO = 57, PIANO_HI = 79; // A3 .. G5 (the playable range is B3 .. F5)
+const isBlack = (m) => [1, 3, 6, 8, 10].includes(((m % 12) + 12) % 12);
+function pianoHTML() {
+  const whites = [];
+  for (let m = PIANO_LO; m <= PIANO_HI; m++) if (!isBlack(m)) whites.push(m);
+  const w = 100 / whites.length;
+  const naturals = new Map(Object.entries(M.BASE_MIDI).map(([id, m]) => [m, id]));
+  const inRange = (m) => m >= M.LOWEST && m <= M.HIGHEST;
+  let h = '';
+  whites.forEach((m, i) => {
+    const p = M.noteParts(m, namePref());
+    h += `<button class="pw ${inRange(m) ? '' : 'oor'}" data-key="${m}" style="left:${i * w}%;width:${w}%" title="${p.label}${inRange(m) ? '' : ' (out of range)'}">
+      ${naturals.has(m) ? `<span class="pk-btn">${esc(G.keyLabel(naturals.get(m), S.scheme, STY))}</span>` : ''}<span class="pk-name">${p.label}</span></button>`;
+  });
+  for (let m = PIANO_LO; m <= PIANO_HI; m++) {
+    if (!isBlack(m)) continue;
+    const i = whites.indexOf(m - 1);
+    const p = M.noteParts(m, namePref());
+    h += `<button class="pb ${inRange(m) ? '' : 'oor'}" data-key="${m}" style="left:${(i + 1) * w - w * 0.32}%;width:${w * 0.64}%" title="${p.label}${p.altLabel ? ' / ' + p.altLabel : ''}"><span class="pk-name">${p.name}</span></button>`;
+  }
+  return `<div class="piano">${h}</div>`;
+}
+
 function renderNotes() {
   const pg = $('#page-notes');
-  const naturals = new Map(Object.entries(M.BASE_MIDI).map(([id, m]) => [m, id]));
-  const keys = [];
-  for (let m = M.LOWEST; m <= M.HIGHEST; m++) {
-    const p = M.noteParts(m, namePref());
-    keys.push(`<button class="key ${p.accidental ? 'blk' : ''}" data-key="${m}" title="${label(m)}">${naturals.has(m) ? icon(naturals.get(m)) : ''}${p.name}<small>${p.octave}</small></button>`);
-  }
   const rows = [];
   for (let m = M.LOWEST; m <= M.HIGHEST; m++) {
     const p = M.noteParts(m, namePref());
-    const list = M.combosFor(m, S.partial);
-    const chips = list.map((c, i) => `<button class="chip ${i === 0 ? 'best' : ''}" data-c="${c.id},${c.half},${c.bend}" title="${esc(G.comboText(c, S.scheme, STY))}">${combo(c)}<span class="diff">${i === 0 ? 'easiest · ' : ''}${M.difficultyLabel(c.cost)}</span></button>`).join('');
-    rows.push(`<div class="card nrow ${naturals.has(m) ? 'natural' : ''}" data-midi="${m}">
-      <div class="nname"><b>${p.name}</b><span class="o">${p.octave}</span>${p.altLabel ? `<span class="enh">= ${p.altLabel}</span>` : ''}</div>
-      <div class="nhz">${M.midiToFreq(m + 12 * S.octave).toFixed(2)} Hz</div>
-      <div class="ncombos">${chips || '<span class="sc-desc">Needs a half tilt. Turn on half-tilt fingerings above.</span>'}</div></div>`);
+    const list = M.combosFor(m, true);
+    const best = list[0];
+    const others = list.slice(1);
+    rows.push(`<div class="nrow ${!best.half && !best.bend ? 'natural' : ''}" data-midi="${m}">
+      <div class="nname"><b>${p.label}</b>${p.altLabel ? `<span class="enh">${p.altLabel}</span>` : ''}</div>
+      <div class="nhow"><button class="chip chip-main" data-c="${best.id},${best.half},${best.bend}" title="Play">${combo(best)}</button><span class="nmethod m-${best.bend ? 'stick' : best.half ? 'half' : 'btn'}">${M.methodLabel(best)}</span></div>
+      <div class="nalt">${others.length ? `<details><summary>${others.length} other way${others.length > 1 ? 's' : ''}</summary><div class="nalt-list">${others.map((c) => `<button class="chip" data-c="${c.id},${c.half},${c.bend}" title="${esc(G.comboText(c, S.scheme, STY))}">${combo(c)}<span class="diff">${M.methodLabel(c)}</span></button>`).join('')}</div></details>` : '<span class="muted">Only way</span>'}</div>
+      <div class="nhz">${M.midiToFreq(m + 12 * S.octave).toFixed(1)} Hz</div>
+    </div>`);
   }
+  const sounding = M.noteParts(M.LOWEST + 12 * S.octave).label + ' to ' + M.noteParts(M.HIGHEST + 12 * S.octave).label;
   pg.innerHTML = `
-    <div class="page-head"><div><h1>Note Chart</h1><p>The ocarina reaches 19 pitches, from B3 to F5. Five come straight from the buttons. The rest use the half-step modifier, the stick, or both, and most can be fingered more than one way. The easiest fingering is listed first. Click any fingering to hear it. The row for whatever you're playing is highlighted.</p></div>
-      <label class="switch"><input type="checkbox" id="partialToggle" ${S.partial ? 'checked' : ''}> Show half-tilt fingerings</label></div>
-    <div class="card keystrip">${keys.join('')}</div>
-    <div class="card legend">
-      <span><span class="combo">${icon('a')}</span> note button</span>
-      <span><span class="combo">${G.modIcon('sharp', S.scheme)}</span> half step up</span>
-      <span><span class="combo">${G.modIcon('flat', S.scheme)}</span> half step down</span>
-      <span><span class="combo">${G.stickIcon(2)}</span> stick fully up (+1 whole step)</span>
-      <span><span class="combo">${G.stickIcon(-1)}</span> stick halfway down (−1 half step)</span>
-    </div>
-    <div class="note-table" style="margin-top:14px">${rows.reverse().join('')}</div>`;
+    <div class="page-head"><div><h1>Note Chart</h1>
+      <p>The ocarina plays 19 notes, from <b>B3 to F5</b> as written in the game's charts${S.octave ? ` (with your current register it sounds ${sounding})` : ''}. Each note shows the recommended way to play it. That means the button alone where possible, then a half-step modifier, and the stick only for the five notes that can't be reached any other way. Click a key or a fingering to hear it.</p></div></div>
+    <div class="card piano-card">${pianoHTML()}
+      <p class="piano-legend"><span class="sw sw-in"></span>Playable <span class="sw sw-oor"></span>Out of range <span class="pk-btn">A</span> labelled keys are the five note buttons</p></div>
+    <div class="card note-table">
+      <div class="nrow nhead"><div>Note</div><div>How to play</div><div>Alternatives</div><div class="nhz">Pitch</div></div>
+      ${rows.join('')}
+    </div>`;
   notesLive = null;
 }
 let notesLive = null;
@@ -854,10 +913,12 @@ $('#page-notes').addEventListener('click', (e) => {
     return;
   }
   const key = e.target.closest('[data-key]');
-  if (key) { ensureAudio(); engine.autoplay([{ combo: M.bestCombo(+key.dataset.key), beats: 1.4 }], 60); }
-});
-$('#page-notes').addEventListener('change', (e) => {
-  if (e.target.id === 'partialToggle') { S.partial = e.target.checked; save(); renderNotes(); }
+  if (key && !key.classList.contains('oor')) {
+    ensureAudio();
+    engine.autoplay([{ combo: M.bestCombo(+key.dataset.key), beats: 1.4 }], 60);
+    const row = $(`#page-notes .nrow[data-midi="${key.dataset.key}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 });
 function updateNotesLive(f) {
   if (page !== 'notes') return;

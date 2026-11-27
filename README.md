@@ -15,7 +15,8 @@ A browser ocarina built for game controllers. Play it the way you did in the N64
 - **Controller input panel:** a live table of every button, modifier and stick axis, showing which ones are pressed and which note is sounding.
 - **Songs:** the ocarina melodies and warp songs are recognized whenever you play them. There's also a custom Scarecrow-style song, public-domain classics that are auto-transposed into range, and exercises. Each one has Listen and Practice modes.
 - **Your own songs:** type them in with simple note syntax (`D4 F#4 G4:2 r Bb3:0.5`), or record them from what you play. You can import and export them as JSON.
-- **Note chart:** all 19 reachable pitches (B3–F5), with every fingering for each one.
+- **Note chart:** a piano keyboard and all 19 playable notes (B3–F5), each with a recommended fingering that avoids the stick unless it's needed, plus alternatives.
+- **Sheet music:** every song can be shown as standard notation, with the button to press printed under each note.
 - **Tips and tricks** for playing well.
 
 ## Run locally
@@ -30,6 +31,7 @@ Then open http://localhost:8000. Controllers only show up in the browser after y
 
 ## Credits
 
+- Sheet music is engraved with [VexFlow](https://www.vexflow.com) (MIT), included in `assets/vendor`.
 - The ocarina sound is a real clay ocarina: one note from "Ocarina de barro (impro)" by Luis Alvaz (CC BY-SA 4.0, Wikimedia Commons), looped and pitch-shifted in the browser. See `assets/audio/CREDITS.md`.
 
 Ocarina Studio is an unofficial fan project. It isn't affiliated with or endorsed by Nintendo. "Nintendo 64", "Nintendo Switch" and related names are trademarks of Nintendo.

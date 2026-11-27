@@ -46,12 +46,21 @@ export function parseNote(str) {
   return (parseInt(m[3], 10) + 1) * 12 + pc;
 }
 
+// Lower is easier. Half-step modifiers are always preferred; the stick is only
+// used when a note can't be reached any other way, and half tilts come last.
 export function comboCost(half, bend) {
   let c = 0;
   if (half) c += 1;
-  if (Math.abs(bend) === 2) c += 1.2;
-  if (Math.abs(bend) === 1) c += 3; // half-tilt takes precision
+  if (Math.abs(bend) === 2) c += 2;
+  if (Math.abs(bend) === 1) c += 6;
   return c;
+}
+
+export function methodLabel(c) {
+  if (!c.half && !c.bend) return 'Button only';
+  if (c.half && !c.bend) return 'Button + half step';
+  if (!c.half) return Math.abs(c.bend) === 2 ? 'Stick needed' : 'Half tilt';
+  return 'Half step + stick';
 }
 
 export function difficultyLabel(cost) {
@@ -90,8 +99,9 @@ export function bestCombo(midi) {
  */
 export function parseSong(text) {
   const out = [];
-  for (const tok of String(text).split(/[\s,|]+/)) {
+  for (const tok of String(text).replace(/\|/g, ' | ').split(/[\s,]+/)) {
     if (!tok) continue;
+    if (tok === '|') { if (out.length) out[out.length - 1].barAfter = true; continue; }
     const [n, d] = tok.split(':');
     const beats = d !== undefined && d !== '' ? parseFloat(d) : 1;
     if (!(beats > 0)) throw new Error(`Bad length in "${tok}"`);
